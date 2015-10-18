@@ -1,0 +1,8 @@
+*.o
+*.so
+*.swp
+.DS_Store
+
+## output files ##
+poi
+output.scm
