@@ -38,11 +38,11 @@
 ;  (assert (vector? items))
 ;  (vector-ref items (vector-index (lambda (item) (equal? (car item) key)) items))))
 
-(define (get-item key items)
-  (vector-find (lambda (x) (equal? (car x) key)) items))
-
+;; (define items '#(("a" . 42) ("b" . 3) ("c" . 17)))
+;; (print (json-get-value "a" items))
+;; ;=> 42
 (define (json-get-value key object)
-  (cdr (get-item key object)))
+  (cdr (vector-find (lambda (x) (equal? (car x) key)) object)))
 
 (let* (
   (uri (github/search/issues "fix typo language:cplusplus type:pr is:merged"))
@@ -55,5 +55,5 @@
     (print (json-get-value "incomplete_results" response))
     (for-each
       (lambda (item) (print (json-get-value "url" item)))
-      (cdr (get-item "items" response)))
+      (json-get-value "items" response))
     (print "Done")))
