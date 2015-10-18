@@ -11,8 +11,17 @@ See also http://wiki.call-cc.org/platforms#mac-os-x
 ## Dependencies
 
 ```sh
-chicken-install http-client
-chicken-install json
-chicken-install vector-lib
-chicken-install openssl
+make dependencies
+```
+
+## Build and Run
+
+```sh
+make
+```
+
+## Test for Mac
+
+```sh
+make gochiusa2
 ```
