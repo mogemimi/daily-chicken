@@ -6,3 +6,4 @@
 ## output files ##
 poi
 output.scm
+output/*

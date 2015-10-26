@@ -44,16 +44,33 @@
 (define (json-get-value key object)
   (cdr (vector-find (lambda (x) (equal? (car x) key)) object)))
 
+;(let* (
+;  (uri (github/search/issues "fix typo language:cplusplus type:pr is:merged"))
+;  (response (with-input-from-request uri #f json-read)))
+;  (begin
+;    (with-output-to-file "output.scm"
+;      (lambda () (pretty-print response)))
+;    (newline)
+;    (print (json-get-value "total_count" response))
+;    (print (json-get-value "incomplete_results" response))
+;    (for-each
+;      (lambda (item) (print (json-get-value "url" item)))
+;      (json-get-value "items" response))
+;    (print "Done")))
+
+(use utils)
 (let* (
-  (uri (github/search/issues "fix typo language:cplusplus type:pr is:merged"))
-  (response (with-input-from-request uri #f json-read)))
-  (begin
-    (with-output-to-file "output.scm"
-      (lambda () (pretty-print response)))
-    (newline)
-    (print (json-get-value "total_count" response))
-    (print (json-get-value "incomplete_results" response))
-    (for-each
-      (lambda (item) (print (json-get-value "url" item)))
-      (json-get-value "items" response))
-    (print "Done")))
+  (download-diff (lambda (uri filename) (let (
+      (response (with-input-from-request uri #f read-string)))
+      (create-directory "output")
+      (with-output-to-file filename (lambda () (print response)))
+      (print "download, done")
+      (newline)
+      response)))
+  (url "https://github.com/mogemimi/pomdog/compare/c7e283d...c870d60.diff")
+  (filename "output/test.diff")
+  (response (cond
+    ((file-exists? filename) (read-all filename))
+    (else (download-diff url filename)))))
+  (print response)
+  (print "done"))
