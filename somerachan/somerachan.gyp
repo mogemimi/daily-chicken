@@ -11,12 +11,13 @@
   'targets': [
     {
       'target_name': 'SomeraChan',
-      'product_name': 'SomeraChan',
+      'product_name': 'somerachan',
       'type': 'executable',
       'sources': [
         'main.cpp',
         'editdistance.cpp',
         'editdistance.h',
+        'optional.h',
         'spellcheck.h',
         'spellcheck-mac.mm',
       ],

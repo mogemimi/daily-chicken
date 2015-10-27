@@ -22,3 +22,5 @@ gochiusa2:
 
 xcode:
 	@gyp somerachan/somerachan.gyp --depth=. -f xcode
+	@xcodebuild -project somerachan/somerachan.xcodeproj -configuration Release
+	@cp somerachan/build/Release/somerachan ./somera

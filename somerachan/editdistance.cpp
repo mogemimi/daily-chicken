@@ -200,7 +200,7 @@ int getCommonPrefixLength(const std::string& left, const std::string& right)
 {
     const auto minLength = std::min(left.size(), right.size());
     int prefix = 0;
-    for (size_t i = 0; i < minLength && !equalCharacter(left[i], right[i]); i++) {
+    for (size_t i = 0; i < minLength and !equalCharacter(left[i], right[i]); i++) {
         prefix++;
     }
     return prefix;
@@ -210,7 +210,7 @@ int getCommonPrefixLength(const std::string& left, const std::string& right)
 
 double EditDistance::jaroWinklerDistance(const std::string& left, const std::string& right)
 {
-    if (left.empty() || right.empty()) {
+    if (left.empty() or right.empty()) {
         return 0;
     }
 
