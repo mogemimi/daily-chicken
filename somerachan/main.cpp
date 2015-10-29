@@ -158,11 +158,11 @@ std::vector<std::string> correctWord(const std::string& word)
         const auto jwA = EditDistance::jaroWinklerDistance(word, a);
         const auto jwB = EditDistance::jaroWinklerDistance(word, b);
         if (jwA != jwB) {
-            return jwA < jwB;
+            return jwA > jwB;
         }
         const auto lsA = EditDistance::levenshteinDistance(word, a);
         const auto lsB = EditDistance::levenshteinDistance(word, b);
-        return lsA >= lsB;
+        return lsA <= lsB;
     });
 
     assert(!corrections.empty());
@@ -246,6 +246,8 @@ void parse(int argc, char *argv[])
 }
 
 } // unnamed namespace
+
+#include <sstream>
 
 int main(int argc, char *argv[])
 {

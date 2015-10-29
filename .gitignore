@@ -7,5 +7,6 @@
 poi
 somera
 somerachan/build/
+somerachan/*.xcodeproj/
 output.scm
 output/*
