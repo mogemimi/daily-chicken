@@ -6,6 +6,10 @@ This is my personal repo for learning CHICKEN Scheme as a hobby.
 brew install chicken
 ```
 
+```sh
+git submodule update --init
+```
+
 See also http://wiki.call-cc.org/platforms#mac-os-x
 
 ## Dependencies
