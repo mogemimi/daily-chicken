@@ -42,11 +42,6 @@
         'libclangStaticAnalyzerCore.a',
         'libclangStaticAnalyzerFrontend.a',
         'libclangToolingCore.a',
-
-        # '<(clang_dir_mac)/lib/clang/3.7.0/lib/darwin/libclang_rt.10.4.a',
-        # '<(clang_dir_mac)/lib/clang/3.7.0/lib/darwin/libclang_rt.cc_kext.a',
-        # '<(clang_dir_mac)/lib/clang/3.7.0/lib/darwin/libclang_rt.osx.a',
-        # '<(clang_dir_mac)/lib/clang/3.7.0/lib/darwin/libclang_rt.profile_osx.a',
       ],
     },
   }}]],

@@ -5,7 +5,8 @@
     },
     'defines': [
         '__STDC_CONSTANT_MACROS',
-        '__STDC_LIMIT_MACROS'
+        '__STDC_LIMIT_MACROS',
+        #'__STDC_FORMAT_MACROS',
     ],
     'include_dirs': [
       '<(llvm_dir_mac)/include',
