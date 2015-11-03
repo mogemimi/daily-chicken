@@ -4,7 +4,7 @@
 .DS_Store
 
 ## output files ##
-bin/
+#bin/
 poi
 somerachan/build/
 somerachan/*.xcodeproj/
