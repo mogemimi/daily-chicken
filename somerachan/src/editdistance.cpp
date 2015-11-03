@@ -1,3 +1,5 @@
+// Copyright (c) 2015 mogemimi. Distributed under the MIT license.
+
 #include "editdistance.h"
 #include <algorithm>
 #include <array>

@@ -1,3 +1,4 @@
+#include "consolecolor.h"
 #include "editdistance.h"
 #include "optional.h"
 #include "spellcheck.h"
@@ -65,155 +66,6 @@ static cl::extrahelp MoreHelp("\nMore help text...");
 
 namespace {
 
-#define UNUSED_CODE 0
-#if UNUSED_CODE
-
-void tryMatch(const std::string& a, const std::string& b)
-{
-    std::printf("%9s %9s", a.c_str(), b.c_str());
-    std::printf(" | %2d", somera::EditDistance::levenshteinDistance(a, b));
-    std::printf(" | %1.4f", somera::EditDistance::closestMatchFuzzyDistance(a, b));
-    std::printf(" | %1.4f", somera::EditDistance::jaroWinklerDistance(a, b));
-    std::cout << std::endl;
-}
-
-void checkSpell(const std::string& word)
-{
-    auto correction = somera::NativeSpellChecker::correctSpelling(word);
-    auto result = somera::NativeSpellChecker::findClosestWords(word);
-
-    std::cout << word << " => ";
-
-    if (correction.empty()) {
-        std::cout << "(is not misspelling)";
-    }
-    else {
-        std::cout << correction;
-    }
-
-    {
-        std::cout << " (";
-        bool spacing = false;
-        for (auto & s : result) {
-            if (spacing) {
-                std::cout << " ";
-            }
-            std::cout << s;
-            spacing = true;
-        }
-        std::cout << ")" << std::endl;
-    }
-}
-
-void test()
-{
-    std::printf("%9s %9s | Ls | fast-M | Jw \n", "s1", "s2");
-
-    tryMatch("LISP", "LISP");
-    tryMatch("LISP", "LISp");
-    tryMatch("LISP", "LIsp");
-    tryMatch("LISP", "Lisp");
-    tryMatch("LISP", "lisp");
-    tryMatch("LISP", "lis");
-    tryMatch("LISP", "li");
-    tryMatch("LISP", "l");
-    tryMatch("LISP", "");
-    tryMatch("abcd", "abcd");
-    tryMatch("abcd", "abcD");
-    tryMatch("abcd", "Abcd");
-    tryMatch("abc", "abc");
-    tryMatch("abc", "Abc");
-    tryMatch("abc", "aBc");
-    tryMatch("abc", "abC");
-    tryMatch("abc", "ABc");
-    tryMatch("abc", "aBC");
-    tryMatch("abc", "AbC");
-    tryMatch("abc", "acb");
-    tryMatch("abc", "bac");
-    tryMatch("abc", "bca");
-    tryMatch("abc", "acB");
-    tryMatch("A", "A");
-    tryMatch("A", "a");
-    tryMatch("A", "B");
-    tryMatch("Google", "google");
-    tryMatch("Typo", "Type");
-    tryMatch("Hoge", "Foo");
-    tryMatch("unkown", "unknown");
-
-    std::cout << "------" << std::endl;
-
-    checkSpell("unknown");
-    checkSpell("unkown");
-    checkSpell("exisiting");
-    checkSpell("volid");
-    tryMatch("volid", "solid");
-    tryMatch("volid", "valid");
-    tryMatch("volid", "void");
-    tryMatch("volid", "voile");
-    tryMatch("volid", "vilid");
-    tryMatch("volid", "vllid");
-    checkSpell("charater");
-    tryMatch("charater", "charter");
-    tryMatch("charater", "character");
-}
-
-
-
-
-
-void parse(int argc, char *argv[])
-{
-    if (argc < 2) {
-        std::printf("failed");
-        return;
-    }
-
-    std::string path = argv[1];
-
-    if (path.empty()) {
-        std::printf("failed");
-        return;
-    }
-
-    std::fstream stream(path);
-
-    if (!stream) {
-        std::printf("cannot open file %s", path.c_str());
-        return;
-    }
-
-    std::cout << "open: " << path << std::endl;
-
-    std::set<std::string> dictionary = {"json", "impl"};
-
-    std::string line;
-    while(std::getline(stream, line)) {
-        splitWords(line, [&dictionary](const std::string& word){
-            auto iter = dictionary.find(word);
-            if (iter != std::end(dictionary)) {
-                return;
-            }
-            auto corrections = correctWord(word);
-            if (!corrections.empty()) {
-                std::printf("%10s => %10s", word.c_str(), corrections.front().c_str());
-                if (corrections.size() > 1) {
-                    std::printf(" (");
-                    for (size_t i = 1; i < corrections.size(); ++i) {
-                        if (i > 1) {
-                            std::printf(" ");
-                        }
-                        std::printf("%s", corrections[i].c_str());
-                    }
-                    std::printf(")");
-                }
-                std::printf("\n");
-            }
-        });
-    }
-}
-
-#endif
-
 std::vector<std::string> correctWord(const std::string& word)
 {
     auto correction = somera::NativeSpellChecker::correctSpelling(word);
@@ -250,15 +102,60 @@ std::vector<std::string> correctWord(const std::string& word)
     return std::move(corrections);
 }
 
+struct TypoSource {
+    std::string file;
+    clang::SourceRange range;
+};
+
+struct Typo {
+    std::string typo;
+    std::vector<std::string> corrections;
+    std::vector<TypoSource> sources;
+};
+
+struct TypoSet {
+    std::map<std::string, Typo> typos;
+
+    bool exists(const std::string& word)
+    {
+        return typos.find(word) != std::end(typos);
+    }
+
+    somera::Optional<Typo> findTypo(const std::string& word)
+    {
+        auto iter = typos.find(word);
+        if (iter != std::end(typos)) {
+            return iter->second;
+        }
+        return somera::NullOpt;
+    }
+
+    void addTypoSource(const std::string& word, TypoSource && s)
+    {
+        auto iter = typos.find(word);
+        assert(iter != std::end(typos));
+        iter->second.sources.push_back(std::move(s));
+    }
+
+    void addTypo(Typo && typo)
+    {
+        auto word = typo.typo;
+        typos.emplace(std::move(word), std::move(typo));
+    }
+};
+
 class MyCommentHandler final : public clang::CommentHandler {
 private:
     llvm::StringRef inputFile;
     Rewriter* rewriter = nullptr;
+    TypoSet* typos = nullptr;
 
 public:
     void setFile(llvm::StringRef fileIn) { inputFile = fileIn; }
 
     void setRewriter(Rewriter* rewriterIn) { rewriter = rewriterIn; }
+
+    void setTypoSet(TypoSet* typosIn) { typos = typosIn; }
 
     bool HandleComment(clang::Preprocessor &pp, clang::SourceRange range) override
     {
@@ -267,6 +164,7 @@ public:
             return false;
         }
 
+        assert(typos != nullptr);
         assert(rewriter != nullptr);
         assert(sm.getFilename(range.getBegin()) == inputFile);
 
@@ -277,6 +175,11 @@ public:
         auto sourceString = fileData.substr(startLoc.second, endLoc.second - startLoc.second).str();
 
         std::set<std::string> dictionary = {
+//            ".jpg",
+//            ".png",
+//            ".mp3",
+//            ".ogg",
+//            "//!", // doxygen
             "json",
             "impl",
             "NONINFRINGEMENT", // for MIT License
@@ -286,27 +189,27 @@ public:
         WordSegmenter segmenter;
         segmenter.setDictionary(dictionary);
 
-        segmenter.parse(sourceString, [](const somera::PartOfSpeech& pos) {
+        segmenter.parse(sourceString, [&](const somera::PartOfSpeech& pos) {
             const auto word = pos.text;
             if (pos.tag != somera::PartOfSpeechTag::Raw and
                 pos.tag != somera::PartOfSpeechTag::EnglishWord) {
                 return;
             }
 
+            if (typos->exists(word)) {
+                TypoSource source;
+                source.file = inputFile;
+                source.range = range;
+                typos->addTypoSource(word, std::move(source));
+                return;
+            }
+
             auto corrections = correctWord(word);
             if (!corrections.empty()) {
-                std::printf("%20s => %20s", word.c_str(), corrections.front().c_str());
-                if (corrections.size() > 1) {
-                    std::printf(" (");
-                    for (size_t i = 1; i < corrections.size(); ++i) {
-                        if (i > 1) {
-                            std::printf(" ");
-                        }
-                        std::printf("%s", corrections[i].c_str());
-                    }
-                    std::printf(")");
-                }
-                std::printf("\n");
+                Typo typo;
+                typo.typo = word;
+                typo.corrections = std::move(corrections);
+                typos->addTypo(std::move(typo));
             }
         });
 
@@ -330,12 +233,10 @@ public:
         if (const IfStmt *ifStatement =
                 result.Nodes.getNodeAs<clang::IfStmt>("ifStmt")) {
             const Stmt *Then = ifStatement->getThen();
-            rewriter.InsertText(Then->getLocStart(), "// the 'if' part\n", true,
-                               true);
+            rewriter.InsertText(Then->getLocStart(), "// if\n", true, true);
 
             if (const Stmt *Else = ifStatement->getElse()) {
-                rewriter.InsertText(Else->getLocStart(), "// the 'else' part\n",
-                                   true, true);
+                rewriter.InsertText(Else->getLocStart(), "// else\n", true, true);
             }
         }
     }
@@ -356,8 +257,7 @@ public:
         if (const DeclStmt *declStatement =
                 result.Nodes.getNodeAs<clang::DeclStmt>("declStmt")) {
 
-            rewriter.InsertText(declStatement->getLocStart(),
-                               "// the 'decl start' part\n", true, true);
+            rewriter.InsertText(declStatement->getLocStart(), "// decl\n", true, true);
         }
     }
 
@@ -392,6 +292,34 @@ public:
 
     void EndSourceFileAction() override
     {
+        const auto color1 = [](const std::string& s) {
+            using namespace somera;
+            return changeTerminalTextColor(s, TerminalColor::Blue);
+        };
+
+        const auto color2 = [](const std::string& s) {
+            using namespace somera;
+            return changeTerminalTextColor(s, TerminalColor::Green);
+        };
+
+        for (const auto& typo : typos.typos) {
+            auto & word = typo.second.typo;
+            auto & corrections = typo.second.corrections;
+
+            std::printf("%20s => %20s", word.c_str(), color1(corrections.front()).c_str());
+            if (corrections.size() > 1) {
+                std::printf(" (");
+                for (size_t i = 1; i < corrections.size(); ++i) {
+                    if (i > 1) {
+                        std::printf(" ");
+                    }
+                    std::printf("%s", color2(corrections[i]).c_str());
+                }
+                std::printf(")");
+            }
+            std::printf("\n");
+        }
+
 //        rewriter.getEditBuffer(rewriter.getSourceMgr().getMainFileID())
 //            .write(llvm::outs());
     }
@@ -401,6 +329,7 @@ public:
     {
         commentHandler.setFile(file);
         commentHandler.setRewriter(&rewriter);
+        commentHandler.setTypoSet(&typos);
 
         ci.getPreprocessor().addCommentHandler(&commentHandler);
 
@@ -410,6 +339,7 @@ public:
 
 private:
     Rewriter rewriter;
+    TypoSet typos;
     MyCommentHandler commentHandler;
 };
 

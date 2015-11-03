@@ -16,10 +16,16 @@
         'iutest/include',
       ],
       'sources': [
+        'src/editdistance.cpp',
+        'src/editdistance.h',
+        'src/spellcheck.h',
+        'src/spellcheck-mac.mm',
         'src/wordsegmenter.cpp',
         'src/wordsegmenter.h',
-        'tests/wordsegmenter.cpp',
+        'tests/editdistance.cpp',
         'tests/main.cpp',
+        'tests/spellchecker.cpp',
+        'tests/wordsegmenter.cpp',
       ],
       'xcode_settings': {
         'MACOSX_DEPLOYMENT_TARGET': '10.11',

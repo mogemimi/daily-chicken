@@ -16,6 +16,8 @@
       'type': 'executable',
       'sources': [
         'src/main.cpp',
+        'src/consolecolor.cpp',
+        'src/consolecolor.h',
         'src/editdistance.cpp',
         'src/editdistance.h',
         'src/optional.h',
