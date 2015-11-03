@@ -6,7 +6,6 @@
 ## output files ##
 bin/
 poi
-somera
 somerachan/build/
 somerachan/*.xcodeproj/
 output.scm
