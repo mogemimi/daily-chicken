@@ -2,27 +2,24 @@
   'includes': [
     'oh-my-gyp/c++14.gypi',
     'oh-my-gyp/config-debug-release.gypi',
-    'oh-my-gyp/warn-as-error.gypi',
     'oh-my-gyp/warnings-level3.gypi',
     'oh-my-gyp/mac-basic.gypi',
     'oh-my-gyp/win32-basic.gypi',
-    'oh-my-gyp/mac/llvm.gypi',
-    'oh-my-gyp/mac/clang.gypi',
   ],
   'targets': [
     {
-      'target_name': 'SomeraChan',
-      'product_name': 'somerachan',
+      'target_name': 'SomeraChanTest',
+      'product_name': 'SomeraChanTest',
       'type': 'executable',
+      'include_dirs': [
+        'src',
+        'iutest/include',
+      ],
       'sources': [
-        'src/main.cpp',
-        'src/editdistance.cpp',
-        'src/editdistance.h',
-        'src/optional.h',
-        'src/spellcheck.h',
-        'src/spellcheck-mac.mm',
         'src/wordsegmenter.cpp',
         'src/wordsegmenter.h',
+        'tests/wordsegmenter.cpp',
+        'tests/main.cpp',
       ],
       'xcode_settings': {
         'MACOSX_DEPLOYMENT_TARGET': '10.11',

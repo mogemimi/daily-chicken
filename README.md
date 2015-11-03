@@ -18,7 +18,7 @@ See also http://wiki.call-cc.org/platforms#mac-os-x
 make dependencies
 ```
 
-## Build and Run
+## Build and run
 
 ```sh
 make
@@ -28,4 +28,19 @@ make
 
 ```sh
 make gochiusa2
+```
+
+# Build and run somerachan
+
+Build:
+
+```sh
+export SOMERACHAN_CLANG_DIR="/User/somera/Desktop/clang+llvm-3.7.0-x86_64-apple-darwin"
+make xcode
+```
+
+Run:
+
+```sh
+./bin/somera MySomerachanApp.cpp --
 ```

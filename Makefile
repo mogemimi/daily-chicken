@@ -1,5 +1,5 @@
-SOMERACHAN_LLVM_DIR="~/develop/clang+llvm-3.7.0-x86_64-apple-darwin"
-SOMERACHAN_CLANG_DIR="~/develop/clang+llvm-3.7.0-x86_64-apple-darwin"
+# For example:
+# SOMERACHAN_CLANG_DIR="/User/somera/clang+llvm-3.7.0-x86_64-apple-darwin"
 
 all: build run
 
@@ -25,7 +25,13 @@ gochiusa2:
 
 xcode:
 	@gyp somerachan/somerachan.gyp --depth=. -f xcode \
-		-Dllvm_dir_mac=$(SOMERACHAN_LLVM_DIR) \
+		-Dllvm_dir_mac=$(SOMERACHAN_CLANG_DIR) \
 		-Dclang_dir_mac=$(SOMERACHAN_CLANG_DIR)
 	@xcodebuild -project somerachan/somerachan.xcodeproj -configuration Release
-	@cp somerachan/build/Release/somerachan ./somera
+	@mkdir -p bin
+	@cp somerachan/build/Release/somerachan bin/somera
+	@cp $(SOMERACHAN_CLANG_DIR)/lib/libclang.dylib bin/
+
+test:
+	@gyp somerachan/test.gyp --depth=. -f xcode
+	@xcodebuild -project somerachan/test.xcodeproj -configuration Release

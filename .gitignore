@@ -4,6 +4,7 @@
 .DS_Store
 
 ## output files ##
+bin/
 poi
 somera
 somerachan/build/
