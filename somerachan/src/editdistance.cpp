@@ -235,8 +235,6 @@ double EditDistance::jaroWinklerDistance(const std::string& left, const std::str
 
 int EditDistance::levenshteinDistance(const std::string& left, const std::string& right)
 {
-    const auto leftLength = static_cast<int>(left.size());
-    const auto rightLength = static_cast<int>(right.size());
     const auto rows = static_cast<int>(left.size()) + 1;
     const auto columns = static_cast<int>(right.size()) + 1;
 
@@ -248,28 +246,23 @@ int EditDistance::levenshteinDistance(const std::string& left, const std::string
         return matrix[index];
     };
 
-    for (int row = 0; row < rows; row++) {
+    for (int row = 1; row < rows; row++) {
         mat(row, 0) = row;
     }
-    for (int column = 0; column < columns; column++) {
+    for (int column = 1; column < columns; column++) {
         mat(0, column) = column;
     }
 
-    for (int row = 0; row < leftLength; row++) {
-        for (int column = 0; column < rightLength; column++) {
-            if (equalCharacter(left[row], right[column])) {
-                mat(row + 1, column + 1) = mat(row, column);
+    for (int row = 1; row < rows; row++) {
+        for (int column = 1; column < columns; column++) {
+            auto minCost = std::min(mat(row - 1, column), mat(row, column - 1)) + 1;
+            if (left[row - 1] == right[column - 1]) {
+                minCost = std::min(mat(row - 1, column - 1), minCost);
             }
-            else {
-                const auto minCost = std::min(std::min(
-                    mat(row, column),
-                    mat(row, column + 1)),
-                    mat(row + 1, column));
-                mat(row + 1, column + 1) = (minCost + 1);
-            }
+            mat(row, column) = minCost;
         }
     }
-    return mat(leftLength, rightLength);
+    return mat(rows - 1, columns - 1);
 }
 
 } // namespace somera

@@ -23,6 +23,8 @@
         'src/optional.h',
         'src/spellcheck.h',
         'src/spellcheck-mac.mm',
+        'src/worddiff.cpp',
+        'src/worddiff.h',
         'src/wordsegmenter.cpp',
         'src/wordsegmenter.h',
       ],

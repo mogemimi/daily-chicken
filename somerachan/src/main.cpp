@@ -2,6 +2,7 @@
 #include "editdistance.h"
 #include "optional.h"
 #include "spellcheck.h"
+#include "worddiff.h"
 #include "wordsegmenter.h"
 
 #pragma GCC diagnostic push
@@ -292,28 +293,74 @@ public:
 
     void EndSourceFileAction() override
     {
-        const auto color1 = [](const std::string& s) {
-            using namespace somera;
-            return changeTerminalTextColor(s, TerminalColor::Blue);
-        };
-
-        const auto color2 = [](const std::string& s) {
-            using namespace somera;
-            return changeTerminalTextColor(s, TerminalColor::Green);
-        };
-
         for (const auto& typo : typos.typos) {
             auto & word = typo.second.typo;
             auto & corrections = typo.second.corrections;
 
-            std::printf("%20s => %20s", word.c_str(), color1(corrections.front()).c_str());
+            if (corrections.empty()) {
+                continue;
+            }
+
+            using somera::DiffOperation;
+            using somera::TerminalColor;
+            {
+                auto & correction = corrections.front();
+                auto hunks = somera::computeDiff(word, correction);
+                constexpr int indentSpaces = 18;
+                std::stringstream fromStream;
+                for (auto & hunk : hunks) {
+                    if (hunk.operation == DiffOperation::Equality) {
+                        fromStream << hunk.text;
+                    }
+                    else if (hunk.operation == DiffOperation::Deletion) {
+                        fromStream << somera::changeTerminalTextColor(
+                            hunk.text,
+                            TerminalColor::Black,
+                            TerminalColor::Red);
+                    }
+                }
+                for (int i = indentSpaces - static_cast<int>(word.size()); i > 0; --i) {
+                    fromStream << " ";
+                }
+                std::stringstream toStream;
+                for (auto & hunk : hunks) {
+                    if (hunk.operation == DiffOperation::Equality) {
+                        toStream << hunk.text;
+                    }
+                    else if (hunk.operation == DiffOperation::Insertion) {
+                        toStream << somera::changeTerminalTextColor(
+                            hunk.text,
+                            TerminalColor::White,
+                            TerminalColor::Green);
+                    }
+                }
+                for (int i = indentSpaces - static_cast<int>(correction.size()); i > 0; --i) {
+                    toStream << " ";
+                }
+                std::printf("%s => %s", fromStream.str().c_str(), toStream.str().c_str());
+            }
+
             if (corrections.size() > 1) {
                 std::printf(" (");
                 for (size_t i = 1; i < corrections.size(); ++i) {
                     if (i > 1) {
                         std::printf(" ");
                     }
-                    std::printf("%s", color2(corrections[i]).c_str());
+                    auto & correction = corrections[i];
+                    auto hunks = somera::computeDiff(word, correction);
+                    std::stringstream toStream;
+                    for (auto & hunk : hunks) {
+                        if (hunk.operation == DiffOperation::Equality) {
+                            toStream << hunk.text;
+                        }
+                        else if (hunk.operation == DiffOperation::Insertion) {
+                            toStream << somera::changeTerminalTextColor(
+                                hunk.text,
+                                TerminalColor::Black,
+                                TerminalColor::Blue);
+                        }
+                    }
+                    std::printf("%s", toStream.str().c_str());
                 }
                 std::printf(")");
             }
