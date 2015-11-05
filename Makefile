@@ -34,3 +34,4 @@ xcode:
 test:
 	@gyp somerachan/test.gyp --depth=. -f xcode
 	@xcodebuild -project somerachan/test.xcodeproj -configuration Release
+	./somerachan/build/Release/SomeraChanTest

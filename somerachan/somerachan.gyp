@@ -15,7 +15,6 @@
       'type': 'executable',
       'include_dirs': [
         'src',
-        '.',
       ],
       'sources': [
         'src/main.cpp',
@@ -26,6 +25,8 @@
         'src/optional.h',
         'src/spellcheck.h',
         'src/spellcheck-mac.mm',
+        'src/utf8.cpp',
+        'src/utf8.h',
         'src/worddiff.cpp',
         'src/worddiff.h',
         'src/wordsegmenter.cpp',

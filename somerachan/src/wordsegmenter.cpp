@@ -1,28 +1,15 @@
 // Copyright (c) 2015 mogemimi. Distributed under the MIT license.
 
 #include "wordsegmenter.h"
+#include "utf8.h"
 #include <cassert>
-#include <codecvt>
 #include <cstdint>
-#include <locale>
 #include <vector>
 #include <regex>
 #include <unordered_set>
 
 namespace somera {
 namespace {
-
-std::u32string toUtf32(const std::string& s)
-{
-    std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> convert;
-    return convert.from_bytes(s);
-}
-
-std::string toUtf8(const std::u32string& s)
-{
-    std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> convert;
-    return convert.to_bytes(s);
-}
 
 template <typename F>
 std::vector<std::u32string> splitWords(const std::u32string& text, F isSeparator)
