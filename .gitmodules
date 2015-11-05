@@ -4,6 +4,3 @@
 [submodule "somerachan/oh-my-gyp"]
 	path = somerachan/oh-my-gyp
 	url = git@github.com:mogemimi/oh-my-gyp.git
-[submodule "somerachan/utfcpp"]
-	path = somerachan/utfcpp
-	url = git@github.com:nemtrif/utfcpp.git
