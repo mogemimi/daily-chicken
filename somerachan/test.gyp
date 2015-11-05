@@ -14,6 +14,7 @@
       'include_dirs': [
         'src',
         'iutest/include',
+        '.',
       ],
       'sources': [
         'src/consolecolor.cpp',

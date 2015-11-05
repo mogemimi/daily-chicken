@@ -2,7 +2,9 @@
 
 #include "worddiff.h"
 #include "optional.h"
+#include <algorithm>
 #include <cassert>
+#include <utility>
 
 namespace somera {
 

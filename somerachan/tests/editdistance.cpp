@@ -12,6 +12,10 @@ TEST(EditDistance, ClosestMatchFuzzyDistance)
     EXPECT_EQ(1.0, closestMatch("LISP", "LISP"));
     EXPECT_GT(1.0, closestMatch("LISP", "LISp"));
     EXPECT_LT(0.9, closestMatch("LISP", "LISp"));
+
+    EXPECT_EQ(1.0, closestMatch(u8"不思議なソメラちゃん", u8"不思議なソメラちゃん"));
+    EXPECT_GT(0.72, closestMatch(u8"不思議なソメラちゃん", u8"不思議なLISPソメラちゃん"));
+    EXPECT_LT(0.71, closestMatch(u8"不思議なソメラちゃん", u8"不思議なLISPソメラちゃん"));
 }
 
 TEST(EditDistance, JaroWinklerDistance)

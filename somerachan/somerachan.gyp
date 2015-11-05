@@ -13,6 +13,10 @@
       'target_name': 'SomeraChan',
       'product_name': 'somerachan',
       'type': 'executable',
+      'include_dirs': [
+        'src',
+        '.',
+      ],
       'sources': [
         'src/main.cpp',
         'src/consolecolor.cpp',

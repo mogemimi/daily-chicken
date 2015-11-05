@@ -1,6 +1,7 @@
 // Copyright (c) 2015 mogemimi. Distributed under the MIT license.
 
 #include "editdistance.h"
+#include "utfcpp/source/utf8.h"
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -25,7 +26,7 @@ public:
     }
 };
 
-double matchCharacter(char a, char b)
+double matchCharacter(uint32_t a, uint32_t b)
 {
     constexpr auto FullMatchScore = 1.0;
     constexpr auto CapitalMatchScore = 0.9;
@@ -34,11 +35,38 @@ double matchCharacter(char a, char b)
     if (a == b) {
         return FullMatchScore;
     }
-    if (std::tolower(a) == std::tolower(b)) {
+    if (::isalpha(a) and ::isalpha(b) and (::tolower(a) == ::tolower(b))) {
         return CapitalMatchScore;
     }
     return NoMatch;
 }
+
+namespace utf8somera {
+
+utf8::iterator<std::string::const_iterator> begin(const std::string& s)
+{
+    utf8::iterator<std::string::const_iterator> it(s.begin(), s.begin(), s.end());
+    return std::move(it);
+}
+
+utf8::iterator<std::string::const_iterator> end(const std::string& s)
+{
+    utf8::iterator<std::string::const_iterator> it(s.end(), s.begin(), s.end());
+    return std::move(it);
+}
+
+template <typename Iterator>
+auto distance(Iterator first, Iterator last)
+{
+    return utf8::distance(first.base(), last.base());
+}
+
+std::size_t size(const std::string& s)
+{
+    return utf8::distance(s.begin(), s.end());
+}
+
+} // namespace utf8somera
 
 double closestMatchDistance(const std::string& left, const std::string& right)
 {
@@ -53,10 +81,10 @@ double closestMatchDistance(const std::string& left, const std::string& right)
     CompensatedSumAccumulator<double> accumulator;
     double matchValue = 0;
 
-    auto leftIter = std::begin(left);
-    auto rightIter = std::begin(right);
+    auto leftIter = utf8somera::begin(left);
+    auto rightIter = utf8somera::begin(right);
 
-    while (leftIter != std::end(left) && rightIter != std::end(right))
+    while (leftIter != utf8somera::end(left) && rightIter != utf8somera::end(right))
     {
         const auto matchScore = matchCharacter(*leftIter, *rightIter);
         if (matchScore > 0.0) {
@@ -69,21 +97,21 @@ double closestMatchDistance(const std::string& left, const std::string& right)
         assert(std::begin(left) != std::end(left));
         assert(std::begin(right) != std::end(right));
 
-        auto leftBest = std::end(left);
-        auto rightBest = std::end(right);
+        auto leftBest = utf8somera::end(left);
+        auto rightBest = utf8somera::end(right);
         int bestCount = std::numeric_limits<int>::max();
         int leftCount = 0;
         int rightCount = 0;
 
-        for (auto leftPoint = leftIter; leftPoint != std::end(left); ++leftPoint) {
-            assert(leftCount == std::distance(leftIter, leftPoint));
+        for (auto leftPoint = leftIter; leftPoint != utf8somera::end(left); ++leftPoint) {
+            assert(leftCount == utf8somera::distance(leftIter, leftPoint));
             if (leftCount + rightCount >= bestCount) {
                 // For fast pruning
                 break;
             }
 
-            for (auto rightPoint = rightIter; rightPoint != std::end(right); ++rightPoint) {
-                assert(rightCount == std::distance(rightIter, rightPoint));
+            for (auto rightPoint = rightIter; rightPoint != utf8somera::end(right); ++rightPoint) {
+                assert(rightCount == utf8somera::distance(rightIter, rightPoint));
                 if (leftCount + rightCount >= bestCount) {
                     // For fast pruning
                     break;
@@ -107,7 +135,7 @@ double closestMatchDistance(const std::string& left, const std::string& right)
         rightIter = rightBest;
     }
 
-    const auto largerSize = std::max(left.size(), right.size());
+    const auto largerSize = std::max(utf8somera::size(left), utf8somera::size(right));
 
     assert(matchValue >= 0);
     return std::min(matchValue, static_cast<double>(largerSize));
@@ -117,7 +145,7 @@ double closestMatchDistance(const std::string& left, const std::string& right)
 
 double EditDistance::closestMatchFuzzyDistance(const std::string& left, const std::string& right)
 {
-    const auto maxLength = std::max(left.size(), right.size());
+    const auto maxLength = std::max(utf8somera::size(left), utf8somera::size(right));
     const auto distance = closestMatchDistance(left, right) / maxLength;
     return std::min(std::max(distance, 0.0), 1.0);
 }
