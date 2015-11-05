@@ -25,7 +25,6 @@ gochiusa2:
 
 xcode:
 	@gyp somerachan/somerachan.gyp --depth=. -f xcode \
-		-Dllvm_dir_mac=$(SOMERACHAN_CLANG_DIR) \
 		-Dclang_dir_mac=$(SOMERACHAN_CLANG_DIR)
 	@xcodebuild -project somerachan/somerachan.xcodeproj -configuration Release
 	@mkdir -p bin

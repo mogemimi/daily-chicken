@@ -6,8 +6,7 @@
     'oh-my-gyp/warnings-level3.gypi',
     'oh-my-gyp/mac-basic.gypi',
     'oh-my-gyp/win32-basic.gypi',
-    'oh-my-gyp/mac/llvm.gypi',
-    'oh-my-gyp/mac/clang.gypi',
+    'oh-my-gyp/mac/clang-libtooling.gypi',
   ],
   'targets': [
     {

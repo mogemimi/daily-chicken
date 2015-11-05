@@ -1,3 +1,6 @@
 [submodule "somerachan/iutest"]
 	path = somerachan/iutest
 	url = https://github.com/srz-zumix/iutest.git
+[submodule "somerachan/oh-my-gyp"]
+	path = somerachan/oh-my-gyp
+	url = git@github.com:mogemimi/oh-my-gyp.git
