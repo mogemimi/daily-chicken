@@ -1,4 +1,4 @@
-#include "wordsegmenter.h"
+﻿#include "wordsegmenter.h"
 #include <gtest/iutest_switch.hpp>
 #include <vector>
 

@@ -6,6 +6,7 @@
 #include <array>
 #include <cassert>
 #include <vector>
+#include <ciso646>
 
 namespace somera {
 namespace {

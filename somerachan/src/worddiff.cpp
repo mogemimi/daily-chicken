@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cassert>
 #include <utility>
+#include <ciso646>
 
 namespace somera {
 

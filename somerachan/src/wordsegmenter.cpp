@@ -7,6 +7,7 @@
 #include <vector>
 #include <regex>
 #include <unordered_set>
+#include <ciso646>
 
 namespace somera {
 namespace {
@@ -184,6 +185,19 @@ PartOfSpeechTag findPartOfSpeechTag(const std::string& text)
     return PartOfSpeechTag::Raw;
 }
 
+bool isSpace(uint32_t c)
+{
+    return ::isspace(c) != 0;
+}
+
+bool isAsciiSymbols(uint32_t c)
+{
+    return (33 <= c and c <= 47)
+        or (58 <= c and c <= 64)
+        or (91 <= c and c <= 96)
+        or (123 <= c and c <= 126);
+}
+
 } // unnamed namespace
 
 void WordSegmenter::setDictionary(const std::set<std::string>& dictionaryIn)
@@ -206,14 +220,8 @@ void WordSegmenter::parse(
     bool recursive)
 {
     const auto text = toUtf32(utf8Text);
-    const auto words = splitWords(text, recursive
-        ? [](uint32_t c)-> bool { return ::isspace(c); }
-        : [](uint32_t c)-> bool {
-            return (33 <= c and c <= 47)
-                or (58 <= c and c <= 64)
-                or (91 <= c and c <= 96)
-                or (123 <= c and c <= 126);
-        });
+    const auto words = splitWords(text,
+        recursive ? isSpace : isAsciiSymbols);
 
     std::vector<std::u32string> candidates;
 

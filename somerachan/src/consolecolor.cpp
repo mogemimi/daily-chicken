@@ -2,6 +2,7 @@
 
 #include "consolecolor.h"
 #include <sstream>
+#include <ciso646>
 
 namespace somera {
 namespace {
@@ -23,10 +24,12 @@ int getColorIndex(TerminalColor color)
 
 bool hasTerminalColors()
 {
+#if defined(__APPLE_CC__) || defined(linux) || defined(__linux) || defined(__linux__)
     if (::isatty(::fileno(stdout)) == 1) {
         const auto term = ::getenv("TERM");
         return (term != nullptr && ::strcmp(term, "dumb"));
     }
+#endif
     return false;
 }
 
