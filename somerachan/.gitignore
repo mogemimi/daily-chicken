@@ -1,1 +1,9 @@
+# Xcode
 somerachan.xcodeproj
+
+# Visual Studio
+*.filters
+*.opensdf
+*.sdf
+*.sln
+*.vcxproj

@@ -24,7 +24,6 @@
         'src/editdistance.h',
         'src/optional.h',
         'src/spellcheck.h',
-        'src/spellcheck-mac.mm',
         'src/utf8.cpp',
         'src/utf8.h',
         'src/worddiff.cpp',
@@ -32,16 +31,28 @@
         'src/wordsegmenter.cpp',
         'src/wordsegmenter.h',
       ],
+      'conditions': [
+        ['OS == "win"', {
+          'sources': [
+            'src/spellcheck-win.cpp',
+          ],
+        }],
+        ['OS == "mac"', {
+          'sources': [
+            'src/spellcheck-mac.mm',
+          ],
+          'link_settings': {
+            'libraries': [
+              '$(SDKROOT)/System/Library/Frameworks/AppKit.framework',
+            ],
+          },
+        }],
+      ],
       'xcode_settings': {
         'MACOSX_DEPLOYMENT_TARGET': '10.11',
         'CLANG_ENABLE_OBJC_ARC': 'YES',
         'LD_RUNPATH_SEARCH_PATHS': [
             '@executable_path/',
-        ],
-      },
-      'link_settings': {
-        'libraries': [
-          '$(SDKROOT)/System/Library/Frameworks/AppKit.framework',
         ],
       },
     },
