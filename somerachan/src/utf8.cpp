@@ -2,10 +2,11 @@
 
 #include "utf8.h"
 #include <codecvt>
-#include <clocale>
+#include <locale>
 #include <utility>
 
 #if defined(_MSC_VER)
+#include <clocale>
 #include <cuchar>
 #include <vector>
 #include <cassert>
@@ -60,7 +61,6 @@ std::u32string toUtf32(const std::string& s)
     //return std::move(result);
 #else
     std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> convert;
-    //std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> convert;
     return convert.from_bytes(s);
 #endif
 }
