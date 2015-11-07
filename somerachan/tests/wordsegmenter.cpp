@@ -6,7 +6,7 @@ using somera::PartOfSpeechTag;
 using somera::PartOfSpeech;
 using somera::WordSegmenter;
 
-TEST(WordSegmenter, TrivialCase)
+TEST(WordSegmenter, Parse_FirstCase)
 {
     WordSegmenter segmenter;
 
@@ -14,7 +14,6 @@ TEST(WordSegmenter, TrivialCase)
     auto read = [&](const PartOfSpeech& pos) { words.push_back(pos.text); };
 
     segmenter.parse("Time flies like an arrow.", read);
-
     ASSERT_EQ(5, words.size());
     EXPECT_EQ(words[0], "Time");
     EXPECT_EQ(words[1], "flies");
@@ -23,7 +22,7 @@ TEST(WordSegmenter, TrivialCase)
     EXPECT_EQ(words[4], "arrow");
 }
 
-TEST(WordSegmenter, TrivialCase2)
+TEST(WordSegmenter, Parse_Comma)
 {
     WordSegmenter segmenter;
 
@@ -31,7 +30,6 @@ TEST(WordSegmenter, TrivialCase2)
     auto read = [&](const PartOfSpeech& pos) { words.push_back(pos.text); };
 
     segmenter.parse("Time,flies like,an arrow.", read);
-
     ASSERT_EQ(5, words.size());
     EXPECT_EQ(words[0], "Time");
     EXPECT_EQ(words[1], "flies");
@@ -40,7 +38,35 @@ TEST(WordSegmenter, TrivialCase2)
     EXPECT_EQ(words[4], "arrow");
 }
 
-TEST(WordSegmenter, Url)
+TEST(WordSegmenter, Parse_Contractions)
+{
+    WordSegmenter segmenter;
+    {
+        std::vector<std::string> words;
+        auto read = [&](const PartOfSpeech& pos) { words.push_back(pos.text); };
+
+        segmenter.parse("Don't forget where you belong.", read);
+        ASSERT_EQ(5, words.size());
+        EXPECT_EQ(words[0], "Don't");
+        EXPECT_EQ(words[1], "forget");
+        EXPECT_EQ(words[2], "where");
+        EXPECT_EQ(words[3], "you");
+        EXPECT_EQ(words[4], "belong");
+    }
+    {
+        std::vector<std::string> words;
+        auto read = [&](const PartOfSpeech& pos) { words.push_back(pos.text); };
+
+        segmenter.parse("I mustn't run away.", read);
+        ASSERT_EQ(4, words.size());
+        EXPECT_EQ(words[0], "I");
+        EXPECT_EQ(words[1], "mustn't");
+        EXPECT_EQ(words[2], "run");
+        EXPECT_EQ(words[3], "away");
+    }
+}
+
+TEST(WordSegmenter, Parse_Url)
 {
     WordSegmenter segmenter;
 
@@ -63,6 +89,21 @@ TEST(WordSegmenter, Url)
     EXPECT_EQ(words[3].tag, PartOfSpeechTag::EnglishWord);
     EXPECT_EQ(words[4].tag, PartOfSpeechTag::Url);
     EXPECT_EQ(words[5].tag, PartOfSpeechTag::EnglishWord);
+}
+
+TEST(WordSegmenter, Parse_Japanese)
+{
+    WordSegmenter segmenter;
+
+    std::vector<PartOfSpeech> words;
+    auto read = [&](const PartOfSpeech& pos) { words.push_back(pos); };
+
+    segmenter.parse(u8"Somerachan is 不思議なソメラちゃん.", read);
+
+    ASSERT_EQ(3, words.size());
+    EXPECT_EQ(words[0].text, "Somerachan");
+    EXPECT_EQ(words[1].text, "is");
+    EXPECT_EQ(words[2].text, "不思議なソメラちゃん");
 }
 
 TEST(WordSegmenter, FastUrlRegex)
@@ -215,4 +256,24 @@ TEST(WordSegmenter, WordAndRegex)
     EXPECT_FALSE(std::regex_match("see:2", re));
     EXPECT_FALSE(std::regex_match("see;abc", re));
     EXPECT_FALSE(std::regex_match("2Look!", re));
+}
+
+TEST(WordSegmenter, ContractionRegex)
+{
+    const std::regex re(R"([A-Z]?[a-z]+n't)");
+    EXPECT_TRUE(std::regex_match("Don't", re));
+    EXPECT_TRUE(std::regex_match("don't", re));
+    EXPECT_TRUE(std::regex_match("didn't", re));
+    EXPECT_TRUE(std::regex_match("haven't", re));
+    EXPECT_TRUE(std::regex_match("needn't", re));
+    EXPECT_TRUE(std::regex_match("wasn't", re));
+    EXPECT_TRUE(std::regex_match("aren't", re));
+    EXPECT_TRUE(std::regex_match("won't", re));
+
+    EXPECT_FALSE(std::regex_match("n't", re));
+    EXPECT_FALSE(std::regex_match("1n't", re));
+    EXPECT_FALSE(std::regex_match(".n't", re));
+    EXPECT_FALSE(std::regex_match("n't.", re));
+    EXPECT_FALSE(std::regex_match("n't,", re));
+    EXPECT_FALSE(std::regex_match("Dn't", re));
 }

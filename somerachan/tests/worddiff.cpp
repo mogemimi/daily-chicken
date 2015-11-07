@@ -180,4 +180,14 @@ TEST(WordDiff, TrivialCase)
         EXPECT_EQ(" AS IS", hunks[5].text);
         EXPECT_EQ(DiffOperation::Equality, hunks[5].operation);
     }
+    {
+        auto hunks = computeDiff("liecense", "license");
+        ASSERT_EQ(3, hunks.size());
+        EXPECT_EQ("li", hunks[0].text);
+        EXPECT_EQ(DiffOperation::Equality, hunks[0].operation);
+        EXPECT_EQ("e", hunks[1].text);
+        EXPECT_EQ(DiffOperation::Deletion, hunks[1].operation);
+        EXPECT_EQ("cense", hunks[2].text);
+        EXPECT_EQ(DiffOperation::Equality, hunks[2].operation);
+    }
 }

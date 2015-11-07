@@ -157,6 +157,13 @@ PartOfSpeechTag findPartOfSpeechTag(const std::string& text)
         }
     }
     {
+        // Contractions. For example: "don't"
+        const std::regex re(R"([A-Z]?[a-z]+n't)");
+        if (std::regex_match(text, re)) {
+            return PartOfSpeechTag::EnglishWord;
+        }
+    }
+    {
         const std::regex re(R"(git@\w+\..+)");
         if (std::regex_match(text, re)) {
             return PartOfSpeechTag::GitUrl;
@@ -200,8 +207,13 @@ void WordSegmenter::parse(
 {
     const auto text = toUtf32(utf8Text);
     const auto words = splitWords(text, recursive
-        ? [](int c)->bool{ return ::isspace(c); }
-        : [](int c)->bool{ return !::isalnum(c); });
+        ? [](uint32_t c)-> bool { return ::isspace(c); }
+        : [](uint32_t c)-> bool {
+            return (33 <= c and c <= 47)
+                or (58 <= c and c <= 64)
+                or (91 <= c and c <= 96)
+                or (123 <= c and c <= 126);
+        });
 
     std::vector<std::u32string> candidates;
 
