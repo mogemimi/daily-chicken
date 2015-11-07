@@ -115,6 +115,9 @@ struct Typo {
 };
 
 struct TypoSet {
+private:
+    std::vector<std::string> newTypoWords;
+public:
     std::map<std::string, Typo> typos;
 
     bool exists(const std::string& word)
@@ -122,11 +125,11 @@ struct TypoSet {
         return typos.find(word) != std::end(typos);
     }
 
-    somera::Optional<Typo> findTypo(const std::string& word)
+    somera::Optional<Typo*> findTypo(const std::string& word)
     {
         auto iter = typos.find(word);
         if (iter != std::end(typos)) {
-            return iter->second;
+            return &iter->second;
         }
         return somera::NullOpt;
     }
@@ -141,7 +144,18 @@ struct TypoSet {
     void addTypo(Typo && typo)
     {
         auto word = typo.typo;
-        typos.emplace(std::move(word), std::move(typo));
+        newTypoWords.push_back(word);
+        typos.emplace(word, std::move(typo));
+    }
+
+    void clearNewTypoWords()
+    {
+        newTypoWords.clear();
+    }
+
+    const std::vector<std::string>& getNewTypoWords() const
+    {
+        return newTypoWords;
     }
 };
 
@@ -289,13 +303,14 @@ private:
 
 class MyFrontendAction final : public ASTFrontendAction {
 public:
-    MyFrontendAction() {}
+    MyFrontendAction(TypoSet & typosIn) : typos(typosIn) {}
 
     void EndSourceFileAction() override
     {
-        for (const auto& typo : typos.typos) {
-            auto & word = typo.second.typo;
-            auto & corrections = typo.second.corrections;
+        for (const auto& word : typos.getNewTypoWords()) {
+            assert(typos.exists(word));
+            const auto& typo = **typos.findTypo(word);
+            const auto& corrections = typo.corrections;
 
             if (corrections.empty()) {
                 continue;
@@ -366,6 +381,7 @@ public:
             }
             std::printf("\n");
         }
+        typos.clearNewTypoWords();
 
 //        rewriter.getEditBuffer(rewriter.getSourceMgr().getMainFileID())
 //            .write(llvm::outs());
@@ -386,7 +402,7 @@ public:
 
 private:
     Rewriter rewriter;
-    TypoSet typos;
+    TypoSet & typos;
     MyCommentHandler commentHandler;
 };
 
@@ -398,6 +414,16 @@ public:
     }
 };
 
+class MyFrontendActionFactory final : public FrontendActionFactory {
+    TypoSet & typos;
+public:
+    MyFrontendActionFactory(TypoSet & typosIn) : typos(typosIn) {}
+
+    clang::FrontendAction* create() override {
+        return new MyFrontendAction(typos);
+    }
+};
+
 } // unnamed namespace
 
 int main(int argc, const char **argv)
@@ -405,8 +431,9 @@ int main(int argc, const char **argv)
     CommonOptionsParser options(argc, argv, MyToolCategory);
     ClangTool tool(options.getCompilations(), options.getSourcePathList());
 
+    TypoSet typos;
     MyDiagnosticConsumer diagnosticConsumer;
     tool.setDiagnosticConsumer(&diagnosticConsumer);
 
-    return tool.run(newFrontendActionFactory<MyFrontendAction>().get());
+    return tool.run(std::make_unique<MyFrontendActionFactory>(typos).get());
 }
