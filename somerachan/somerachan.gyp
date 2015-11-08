@@ -30,6 +30,8 @@
         'src/worddiff.h',
         'src/wordsegmenter.cpp',
         'src/wordsegmenter.h',
+        'src/thirdparty/ConvertUTF.c',
+        'src/thirdparty/ConvertUTF.h',
       ],
       'conditions': [
         ['OS == "win"', {

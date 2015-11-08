@@ -5,93 +5,80 @@
 #include <locale>
 #include <utility>
 
-#if defined(_MSC_VER)
-#include <clocale>
-#include <cuchar>
+#define USE_LLVM_CONVERTUTF 1
+#if defined(USE_LLVM_CONVERTUTF)
+#include "thirdparty/ConvertUTF.h"
 #include <vector>
 #include <cassert>
 #endif
 
 namespace somera {
 
-std::u32string toUtf32(const std::string& s)
+std::u32string toUtf32(const std::string& utf8)
 {
-    if (s.empty()) {
+    if (utf8.empty()) {
         return {};
     }
 
-    //static_assert(__STDC_UTF_16__ == 1, "");
-    //static_assert(__STDC_UTF_32__ == 1, "");
+#if defined(USE_LLVM_CONVERTUTF)
+    auto src = reinterpret_cast<const UTF8*>(utf8.data());
+    auto srcEnd = reinterpret_cast<const UTF8*>(utf8.data() + utf8.size());
 
-#if defined(_MSC_VER)
-    //mbstate_t state;
-    //std::setlocale(LC_ALL, "en_US.UTF-8");
-    ////std::mbsinit(&state);
+    std::u32string result;
+    result.resize(utf8.length() + 1);
+    auto dest = reinterpret_cast<UTF32*>(&result[0]);
+    auto destEnd = dest + result.size();
 
-    //char32_t c32 = 0;
-    //auto pointer = s.data();
-    //const auto end = pointer + s.size();
-    //std::u32string result;
+    ConversionResult CR =
+        ::ConvertUTF8toUTF32(&src, srcEnd, &dest, destEnd, strictConversion);
+    assert(CR != targetExhausted);
 
-    //while (end - pointer > 0) {
-    //    assert(pointer != end);
-    //    assert(pointer < end);
-    //    assert(end - pointer > 0);
-    //    size_t rc = std::mbrtoc32(&c32, pointer, end - pointer, &state);
-    //    if (rc == static_cast<size_t>(-2)) {
-    //        // error
-    //        break;
-    //    }
-    //    if (rc == static_cast<size_t>(-1)) {
-    //        // error
-    //        break;
-    //    }
-    //    if (rc == static_cast<size_t>(-3)) {
-    //        // error
-    //        break;
-    //    }
-    //    if (rc == 0) {
-    //        // null character
-    //        break;
-    //    }
-    //    assert(rc <= (end - pointer));
-    //    result += c32;
-    //    pointer += rc;
-    //}
-    //return std::move(result);
+    if (CR != conversionOK) {
+        // error
+        result.clear();
+        return std::move(result);
+    }
+
+    result.resize(reinterpret_cast<const char32_t*>(dest) - result.data());
+    result.shrink_to_fit();
+    return std::move(result);
 #else
     std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> convert;
-    return convert.from_bytes(s);
+    return convert.from_bytes(utf8);
 #endif
 }
 
-std::string toUtf8(const std::u32string& s)
+std::string toUtf8(const std::u32string& utf32)
 {
-#if defined(_MSC_VER)
-    //std::setlocale(LC_ALL, "en_US.UTF-8");
-    //mbstate_t state;
-    //std::mbsinit(&state);
+    if (utf32.empty()) {
+        return {};
+    }
 
-    //std::vector<char> out(MB_CUR_MAX);
-    //std::string result;
+#if defined(USE_LLVM_CONVERTUTF)
+    auto src = reinterpret_cast<const UTF32*>(utf32.data());
+    auto srcEnd = reinterpret_cast<const UTF32*>(utf32.data() + utf32.size());
 
-    //for (auto & c32 : s) {
-    //    int rc = std::c32rtomb(out.data(), c32, &state);
-    //    if (rc < 0) {
-    //        // error
-    //        break;
-    //    }
-    //    if (rc == 0) {
-    //        // null character
-    //        break;
-    //    }
-    //    assert(rc < out.size());
-    //    result.append(out.data(), rc);
-    //}
-    //return std::move(result);
+    std::string result;
+    result.resize(utf32.length() * UNI_MAX_UTF8_BYTES_PER_CODE_POINT + 1);
+    auto dest = reinterpret_cast<UTF8*>(&result[0]);
+    auto destEnd = dest + result.size();
+
+    ConversionResult CR =
+        ::ConvertUTF32toUTF8(&src, srcEnd, &dest, destEnd, strictConversion);
+    assert(CR != targetExhausted);
+
+    if (CR != conversionOK) {
+        // error
+        result.clear();
+        return std::move(result);
+    }
+
+    result.resize(reinterpret_cast<const char*>(dest) - result.data());
+    result.shrink_to_fit();
+    return std::move(result);
 #else
     std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> convert;
-    return convert.to_bytes(s);
+    return convert.to_bytes(utf32);
 #endif
 }
 

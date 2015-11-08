@@ -30,7 +30,7 @@ make
 make gochiusa2
 ```
 
-# Build and run somerachan
+## Build and run somerachan
 
 Build:
 
@@ -44,3 +44,8 @@ Run:
 ```sh
 ./bin/somera MySomerachanApp.cpp --
 ```
+
+## Open Source Software used in Somerachan
+
+* LLVM Clang
+* iutest

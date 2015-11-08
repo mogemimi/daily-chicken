@@ -3,6 +3,11 @@
 #include "consolecolor.h"
 #include <sstream>
 #include <ciso646>
+#if defined(__APPLE_CC__) || defined(linux) || defined(__linux) || defined(__linux__)
+#include <cstdlib>
+#include <cstdio>
+#include <unistd.h>
+#endif
 
 namespace somera {
 namespace {

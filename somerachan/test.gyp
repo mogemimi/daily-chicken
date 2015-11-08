@@ -27,6 +27,8 @@
         'src/worddiff.h',
         'src/wordsegmenter.cpp',
         'src/wordsegmenter.h',
+        'src/thirdparty/ConvertUTF.c',
+        'src/thirdparty/ConvertUTF.h',
         'tests/editdistance.cpp',
         'tests/main.cpp',
         'tests/spellchecker.cpp',
