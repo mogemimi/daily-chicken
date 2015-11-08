@@ -48,4 +48,5 @@ Run:
 ## Open Source Software used in Somerachan
 
 * LLVM Clang
+* GYP
 * iutest
