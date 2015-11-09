@@ -18,28 +18,28 @@ namespace somera {
 
 class HttpRequest {
 private:
-	std::function<void(bool error, std::vector<std::uint8_t> const& data)> callback;
-	std::vector<std::uint8_t> blob;
-	CURL* curl;
+    std::function<void(bool error, std::vector<std::uint8_t> const& data)> callback;
+    std::vector<std::uint8_t> blob;
+    CURL* curl;
 
 public:
-	HttpRequest(
+    HttpRequest(
         std::string const& uri,
         std::function<void(bool error, std::vector<std::uint8_t> const& data)> callback);
 
-	~HttpRequest();
+    ~HttpRequest();
 
-	HttpRequest(HttpRequest const&) = delete;
-	HttpRequest & operator=(HttpRequest const&) = delete;
+    HttpRequest(HttpRequest const&) = delete;
+    HttpRequest & operator=(HttpRequest const&) = delete;
 
-	CURL* getCurl() const;
-	void onCompleted();
-	void onError();
+    CURL* getCurl() const;
+    void onCompleted();
+    void onError();
 
     void setTimeout(const std::chrono::seconds& timeout);
 
 private:
-	static void writeCallback(
+    static void writeCallback(
         void const* contents,
         size_t size,
         size_t nmemb,
@@ -48,28 +48,28 @@ private:
 
 class HttpService {
 private:
-	CURLM* multiHandle;
-	std::map<CURL*, std::unique_ptr<HttpRequest>> sessions;
+    CURLM* multiHandle;
+    std::map<CURL*, std::unique_ptr<HttpRequest>> sessions;
     std::chrono::seconds timeout;
 
 public:
-	HttpService();
-	~HttpService();
+    HttpService();
+    ~HttpService();
 
-	HttpService(HttpService const&) = delete;
-	HttpService & operator=(HttpService const&) = delete;
+    HttpService(HttpService const&) = delete;
+    HttpService & operator=(HttpService const&) = delete;
 
     void setTimeout(const std::chrono::seconds& timeout);
 
-	void poll();
+    void poll();
 
     void waitAll();
 
-	void get(
+    void get(
         std::string const& uri,
-		std::function<void(bool, std::vector<std::uint8_t> const&)> callback);
+        std::function<void(bool, std::vector<std::uint8_t> const&)> callback);
 
-	bool empty() const;
+    bool empty() const;
 };
 
 } // namespace somera
