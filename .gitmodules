@@ -4,3 +4,6 @@
 [submodule "somerachan/oh-my-gyp"]
 	path = somerachan/oh-my-gyp
 	url = git@github.com:mogemimi/oh-my-gyp.git
+[submodule "slackbot/rapidjson"]
+	path = slackbot/rapidjson
+	url = git@github.com:miloyip/rapidjson.git
