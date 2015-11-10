@@ -19,8 +19,8 @@
       'sources': [
         'HttpService.cpp',
         'HttpService.h',
-        'iTunesNowplaying.cpp',
-        'iTunesNowplaying.h',
+        'iTunesNowPlaying.cpp',
+        'iTunesNowPlaying.h',
         'main.cpp',
         'SlackClient.cpp',
         'SlackClient.h',

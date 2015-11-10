@@ -2,7 +2,7 @@
 
 #include "HttpService.h"
 #include "SlackClient.h"
-#include "iTunesNowplaying.h"
+#include "iTunesNowPlaying.h"
 #include <iostream>
 #include <thread>
 

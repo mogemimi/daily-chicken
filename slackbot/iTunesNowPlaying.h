@@ -4,7 +4,7 @@
 #include <string>
 
 namespace somera {
-namespace iTunesNowplaying {
+namespace iTunesNowPlaying {
 
 struct Track {
     std::string trackName;
@@ -14,5 +14,5 @@ struct Track {
 
 somera::Optional<Track> getCurrentTrack();
 
-} // namespace iTunesNowplaying
+} // namespace iTunesNowPlaying
 } // namespace somera

@@ -4,9 +4,12 @@
 #include <cstdio>
 #include <sstream>
 #include <utility>
+#ifdef __APPLE_CC__
+#include <Availability.h>
+#endif
 
 namespace somera {
-namespace iTunesNowplaying {
+namespace iTunesNowPlaying {
 namespace {
 
 std::string subprocessCall(const std::string& command)
@@ -30,8 +33,10 @@ std::string subprocessCall(const std::string& command)
 
 somera::Optional<Track> getCurrentTrack()
 {
+#if defined(__APPLE_CC__) \
+    && (MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_8)
+    // for Mac OS X
 #define SOMERA_APPLESCRIPT_TOSTRING(x) std::string(#x)
-
     auto output = subprocessCall("osascript -e" + SOMERA_APPLESCRIPT_TOSTRING(
         'try' -e
             'tell application "iTunes"' -e
@@ -54,7 +59,10 @@ somera::Optional<Track> getCurrentTrack()
     std::getline(stream, track.artistName, '\n');
     std::getline(stream, track.albumName, '\n');
     return std::move(track);
+#else
+    return somera::NullOpt;
+#endif
 }
 
-} // namespace iTunesNowplaying
+} // namespace iTunesNowPlaying
 } // namespace somera
