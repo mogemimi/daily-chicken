@@ -43,7 +43,7 @@ void HttpRequest::setTimeout(const std::chrono::seconds& timeout)
     }
 }
 
-void HttpRequest::writeCallback(
+size_t HttpRequest::writeCallback(
     void const* contents,
     size_t size,
     size_t nmemb,
@@ -52,9 +52,11 @@ void HttpRequest::writeCallback(
     auto userData = reinterpret_cast<HttpRequest*>(userPointer);
     auto & blob = userData->blob;
 
-    auto dataLength = size * nmemb;
-    blob.resize(blob.size() + dataLength);
-    std::memcpy(blob.data() + blob.size() - dataLength, contents, dataLength);
+    auto inputSize = size * nmemb;
+    blob.resize(blob.size() + inputSize);
+    std::memcpy(blob.data() + blob.size() - inputSize, contents, inputSize);
+
+    return inputSize;
 }
 
 void HttpRequest::onCompleted()

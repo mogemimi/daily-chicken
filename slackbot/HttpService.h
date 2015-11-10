@@ -39,7 +39,7 @@ public:
     void setTimeout(const std::chrono::seconds& timeout);
 
 private:
-    static void writeCallback(
+    static size_t writeCallback(
         void const* contents,
         size_t size,
         size_t nmemb,
