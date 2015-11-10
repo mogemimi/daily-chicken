@@ -21,6 +21,9 @@ HttpRequest::HttpRequest(
     curl_easy_setopt(curl, CURLOPT_URL, uri.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, this);
+//    curl_easy_setopt(curl, CURLOPT_USERAGENT, "libcurl-agent/1.0");
+//    curl_easy_setopt(curl, CURLOPT_HEADER, 0L);
+//    curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L);
 }
 
 HttpRequest::~HttpRequest()
@@ -39,7 +42,7 @@ CURL* HttpRequest::getCurl() const
 void HttpRequest::setTimeout(const std::chrono::seconds& timeout)
 {
     if (timeout >= timeout.zero()) {
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout.count());
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, timeout.count());
     }
 }
 
@@ -96,11 +99,10 @@ void HttpService::poll()
     curl_multi_perform(multiHandle, &runningCount);
 
     int messageCount = 0;
-    CURLMsg* message = curl_multi_info_read(multiHandle, &messageCount);
+    CURLMsg* message = nullptr;
 
-    while (message != nullptr)
+    while ((message = curl_multi_info_read(multiHandle, &messageCount)) != nullptr)
     {
-        assert(message->msg == CURLMSG_DONE);
         CURL* curl = message->easy_handle;
 
         curl_multi_remove_handle(multiHandle, curl);
@@ -109,12 +111,20 @@ void HttpService::poll()
         assert(pair != std::end(sessions));
 
         if (pair != std::end(sessions)) {
-            auto & request = pair->second;
-            request->onCompleted();
+            auto request = std::move(pair->second);
+            if (message->msg != CURLMSG_DONE) {
+                //std::fprintf(stderr, "CURL error in %s, %d\n", __FILE__, __LINE__);
+                request->onError();
+            }
+            else if (message->data.result != CURLE_OK) {
+                //std::fprintf(stderr, "CURL error in %s, %d\n", __FILE__, __LINE__);
+                request->onError();
+            }
+            else {
+                request->onCompleted();
+            }
             sessions.erase(pair);
         }
-
-        message = curl_multi_info_read(multiHandle, &messageCount);
     }
 }
 
@@ -125,7 +135,12 @@ void HttpService::waitAll()
         if (this->empty()) {
             break;
         }
-        std::this_thread::sleep_for(std::chrono::microseconds(200));
+
+//        {
+//            int n = 0;
+//            curl_multi_wait(multiHandle, nullptr, 0, 30 * 1000, &n);
+//        }
+        std::this_thread::sleep_for(std::chrono::microseconds(500));
     }
 }
 
