@@ -1,7 +1,6 @@
 // Copyright (c) 2015 mogemimi. Distributed under the MIT license.
 
 #include "../somerachan/src/optional.h"
-//#include "../xconcurrency/xconcurrency.h"
 #include "HttpService.h"
 #include <functional>
 #include <string>
@@ -9,9 +8,6 @@
 #include <map>
 
 namespace somera {
-
-//using xconcurrency::Task;
-//using xconcurrency::TaskCompletionSource;
 
 //struct SlackTopic {
 //    std::string value;
@@ -38,6 +34,20 @@ struct SlackChannel {
     bool is_member;
 };
 
+struct SlackMessage {
+    std::string type;
+    std::string channel;
+    std::string user;
+    std::string text;
+    std::string ts;
+};
+
+struct SlackHistory {
+    std::vector<SlackMessage> messages;
+    std::string latest;
+    bool has_more;
+};
+
 class SlackClient final {
 private:
     somera::HttpService http;
@@ -52,15 +62,6 @@ public:
     /// See https://api.slack.com/methods/api.test
     void apiTest(std::function<void(std::string)> callback);
 
-//    Task<std::string> apiTest()
-//    {
-//        TaskCompletionSource<std::string> tcs;
-//        apiTest([tcs](std::string json) {
-//            tcs.set(json);
-//        });
-//        return xconcurrency::createTask(tcs);
-//    }
-
     /// See https://api.slack.com/methods/auth.test
     void authTest(std::function<void(std::string)> callback);
 
@@ -74,6 +75,11 @@ public:
         const std::string& username,
         const std::string& icon_url,
         std::function<void(std::string)> callback);
+
+    /// See https://slack.com/api/channels.history
+    void channelsHistory(
+        const std::string& channel,
+        std::function<void(SlackHistory)> callback);
 
     void onError(std::function<void(std::string)> callback);
 
