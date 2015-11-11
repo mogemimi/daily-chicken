@@ -261,4 +261,137 @@ void WordSegmenter::parse(
     }
 }
 
+namespace {
+
+enum class CharacterType {
+    Underline,
+    Lowercase,
+    Uppercase,
+    Number,
+    Other,
+};
+
+CharacterType getType(char32_t c)
+{
+    if (u'A' <= c && c <= u'Z') {
+        return CharacterType::Uppercase;
+    }
+    if (u'a' <= c && c <= u'z') {
+        return CharacterType::Lowercase;
+    }
+    if (u'0' <= c && c <= u'9') {
+        return CharacterType::Number;
+    }
+    if (u'_' == c) {
+        return CharacterType::Underline;
+    }
+    return CharacterType::Other;
+}
+
+std::string toUtf8(char32_t c)
+{
+    return somera::toUtf8(std::u32string(&c, 1));
+}
+
+} // unnamed namespace
+
+std::vector<std::string> IdentifierWordSegmenter::parse(const std::string& text)
+{
+    std::vector<std::string> words;
+
+    const auto utf32 = toUtf32(text);
+
+    std::string wordBuffer;
+    for (auto iter = std::begin(utf32); iter != std::end(utf32); ++iter) {
+        const auto c = *iter;
+        if (wordBuffer.empty()) {
+            wordBuffer += toUtf8(c);
+            continue;
+        }
+
+        assert(!wordBuffer.empty());
+        const auto startType = getType(wordBuffer.front());
+        const auto type = getType(c);
+
+        if (startType == CharacterType::Underline) {
+            if (type == CharacterType::Underline) {
+                wordBuffer += toUtf8(c);
+                continue;
+            }
+            else {
+                words.push_back(std::move(wordBuffer));
+                wordBuffer += toUtf8(c);
+                continue;
+            }
+        }
+        else if (startType == CharacterType::Uppercase) {
+            if (type == CharacterType::Lowercase) {
+                wordBuffer += toUtf8(c);
+                continue;
+            }
+            else if (type == CharacterType::Uppercase) {
+                if (getType(wordBuffer.back()) == CharacterType::Lowercase) {
+                    assert(startType == CharacterType::Uppercase);
+                    assert(type == CharacterType::Uppercase);
+                    words.push_back(std::move(wordBuffer));
+                    wordBuffer += toUtf8(c);
+                    continue;
+                }
+
+                const auto nextIter = std::next(iter);
+                if (nextIter == std::end(utf32)) {
+                    wordBuffer += toUtf8(c);
+                    continue;
+                }
+                const auto nextType = getType(*nextIter);
+                if (nextType == CharacterType::Uppercase) {
+                    wordBuffer += toUtf8(c);
+                    continue;
+                }
+                if (nextType == CharacterType::Underline) {
+                    wordBuffer += toUtf8(c);
+                    continue;
+                }
+                if (nextType == CharacterType::Number) {
+                    wordBuffer += toUtf8(c);
+                    continue;
+                }
+                else {
+                    words.push_back(std::move(wordBuffer));
+                    wordBuffer += toUtf8(c);
+                    continue;
+                }
+            }
+            else {
+                words.push_back(std::move(wordBuffer));
+                wordBuffer += toUtf8(c);
+                continue;
+            }
+        }
+        else if (startType == CharacterType::Number) {
+            if (type == CharacterType::Number) {
+                if (getType(wordBuffer.back()) != CharacterType::Number) {
+                    words.push_back(std::move(wordBuffer));
+                    wordBuffer += toUtf8(c);
+                    continue;
+                }
+                else {
+                    wordBuffer += toUtf8(c);
+                    continue;
+                }
+            }
+        }
+
+        if (type != getType(wordBuffer.back())) {
+            words.push_back(std::move(wordBuffer));
+        }
+        wordBuffer += toUtf8(std::u32string(&c, 1));
+    }
+
+    if (!wordBuffer.empty()) {
+        words.push_back(std::move(wordBuffer));
+    }
+    return std::move(words);
+}
+
 } // namespace somera

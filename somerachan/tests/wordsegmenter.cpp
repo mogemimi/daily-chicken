@@ -277,3 +277,96 @@ TEST(WordSegmenter, ContractionRegex)
     EXPECT_FALSE(std::regex_match("n't,", re));
     EXPECT_FALSE(std::regex_match("Dn't", re));
 }
+
+TEST(IdentifierWordSegmenter, Parse)
+{
+    const auto parse = somera::IdentifierWordSegmenter::parse;
+    {
+        const auto words = parse("getPositionX");
+        ASSERT_EQ(3, words.size());
+        EXPECT_EQ("get", words[0]);
+        EXPECT_EQ("Position", words[1]);
+        EXPECT_EQ("X", words[2]);
+    }
+    {
+        const auto words = parse("GetPositionX");
+        ASSERT_EQ(3, words.size());
+        EXPECT_EQ("Get", words[0]);
+        EXPECT_EQ("Position", words[1]);
+        EXPECT_EQ("X", words[2]);
+    }
+    {
+        const auto words = parse("GET_POSITION_X");
+        ASSERT_EQ(5, words.size());
+        EXPECT_EQ("GET", words[0]);
+        EXPECT_EQ("_", words[1]);
+        EXPECT_EQ("POSITION", words[2]);
+        EXPECT_EQ("_", words[3]);
+        EXPECT_EQ("X", words[4]);
+    }
+    {
+        const auto words = parse("OpenGL4");
+        ASSERT_EQ(3, words.size());
+        EXPECT_EQ("Open", words[0]);
+        EXPECT_EQ("GL", words[1]);
+        EXPECT_EQ("4", words[2]);
+    }
+    {
+        const auto words = parse("get_position_x");
+        ASSERT_EQ(5, words.size());
+        EXPECT_EQ("get", words[0]);
+        EXPECT_EQ("_", words[1]);
+        EXPECT_EQ("position", words[2]);
+        EXPECT_EQ("_", words[3]);
+        EXPECT_EQ("x", words[4]);
+    }
+    {
+        const auto words = parse("__position_2d_header__");
+        ASSERT_EQ(8, words.size());
+        EXPECT_EQ("__", words[0]);
+        EXPECT_EQ("position", words[1]);
+        EXPECT_EQ("_", words[2]);
+        EXPECT_EQ("2", words[3]);
+        EXPECT_EQ("d", words[4]);
+        EXPECT_EQ("_", words[5]);
+        EXPECT_EQ("header", words[6]);
+        EXPECT_EQ("__", words[7]);
+    }
+    {
+        const auto words = parse("TXTFile");
+        ASSERT_EQ(2, words.size());
+        EXPECT_EQ("TXT", words[0]);
+        EXPECT_EQ("File", words[1]);
+    }
+    {
+        const auto words = parse("GameEngine2D");
+        ASSERT_EQ(4, words.size());
+        EXPECT_EQ("Game", words[0]);
+        EXPECT_EQ("Engine", words[1]);
+        EXPECT_EQ("2", words[2]);
+        EXPECT_EQ("D", words[3]);
+    }
+    {
+        const auto words = parse("Get2DComponent");
+        ASSERT_EQ(4, words.size());
+        EXPECT_EQ("Get", words[0]);
+        EXPECT_EQ("2", words[1]);
+        EXPECT_EQ("D", words[2]);
+        EXPECT_EQ("Component", words[3]);
+    }
+    {
+        const auto words = parse("124C41+");
+        ASSERT_EQ(4, words.size());
+        EXPECT_EQ("124", words[0]);
+        EXPECT_EQ("C", words[1]);
+        EXPECT_EQ("41", words[2]);
+        EXPECT_EQ("+", words[3]);
+    }
+    {
+        const auto words = parse("___42___");
+        ASSERT_EQ(3, words.size());
+        EXPECT_EQ("___", words[0]);
+        EXPECT_EQ("42", words[1]);
+        EXPECT_EQ("___", words[2]);
+    }
+}
