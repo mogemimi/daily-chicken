@@ -10,8 +10,8 @@
   ],
   'targets': [
     {
-      'target_name': 'SlackBot',
-      'product_name': 'SlackBot',
+      'target_name': 'slackbot',
+      'product_name': 'slackbot',
       'type': 'executable',
       'include_dirs': [
         'rapidjson/include',
@@ -24,6 +24,8 @@
         'main.cpp',
         'SlackClient.cpp',
         'SlackClient.h',
+        'TerminalHelper.cpp',
+        'TerminalHelper.h',
       ],
     },
   ],

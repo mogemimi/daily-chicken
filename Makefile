@@ -38,3 +38,5 @@ test:
 
 slack:
 	@gyp slackbot/slackbot.gyp --depth=. -f xcode
+	@xcodebuild -project slackbot/slackbot.xcodeproj -configuration Release
+	@cp slackbot/build/Release/slackbot bin/slackbot
