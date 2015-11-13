@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <chrono>
 
 namespace somera {
 
@@ -39,7 +40,8 @@ struct SlackMessage {
     std::string channel;
     std::string user;
     std::string text;
-    std::string ts;
+    std::string subtype;
+    std::chrono::system_clock::time_point timestamp;
 };
 
 struct SlackHistory {
@@ -76,7 +78,7 @@ public:
         const std::string& icon_url,
         std::function<void(std::string)> callback);
 
-    /// See https://slack.com/api/channels.history
+    /// See https://api.slack.com/methods/channels.history
     void channelsHistory(
         const std::string& channel,
         std::function<void(SlackHistory)> callback);

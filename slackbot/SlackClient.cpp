@@ -275,7 +275,11 @@ void SlackClient::channelsHistory(
 
                 SlackMessage message;
                 message.type = (*iter)["type"].GetString();
-                message.ts = (*iter)["ts"].GetString();
+                {
+                    auto timestamp = (*iter)["ts"].GetString();
+                    using std::chrono::system_clock;
+                    message.timestamp = system_clock::from_time_t(::atoi(timestamp));
+                }
 
                 if (channelObject.HasMember("user")
                     && channelObject["user"].IsString()) {
@@ -288,6 +292,10 @@ void SlackClient::channelsHistory(
                 if (channelObject.HasMember("channel")
                     && channelObject["channel"].IsString()) {
                     message.channel = (*iter)["channel"].GetString();
+                }
+                if (channelObject.HasMember("subtype")
+                    && channelObject["subtype"].IsString()) {
+                    message.subtype = (*iter)["subtype"].GetString();
                 }
 
                 history.messages.push_back(std::move(message));
