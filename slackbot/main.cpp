@@ -7,6 +7,7 @@
 #include <iostream>
 #include <thread>
 #include <fstream>
+#include <regex>
 
 namespace {
 
@@ -27,6 +28,24 @@ auto findChannel(const std::vector<somera::SlackChannel>& channels, const std::s
         [](const somera::SlackChannel& channel){ return channel.name; },
         name);
 }
+
+namespace StringHelper {
+
+std::string replace(const std::string& source, const std::string& from, const std::string& to)
+{
+    if (from.empty()) {
+        return source;
+    }
+    auto result = source;
+    std::string::size_type start = 0;
+    while ((start = result.find(from, start)) != std::string::npos) {
+        result.replace(start, from.length(), to);
+        start += to.length();
+    }
+    return std::move(result);
+}
+
+} // namespace StringHelper
 
 struct CommandLineParser {
     CommandLineParser(int argc, char *argv[])
@@ -51,6 +70,37 @@ private:
     std::string executablePath;
     std::vector<std::string> arguments;
 };
+
+#if 0
+void chatNowPlaying(somera::SlackClient & slack, const std::string& channelId)
+{
+    auto track = somera::iTunesNowPlaying::getCurrentTrack();
+    if (!track) {
+        std::cout << "Your iTunes is not enabled." << std::endl;
+        return;
+    }
+
+    std::string message;
+    message += u8":saxophone: ";
+    message += "*" + track->trackName + "*" + "  ";
+    message += u8":simple_smile: ";
+    message += "_" + track->artistName + "_" + "  ";
+    message += u8":cd: ";
+    message += "_" + track->albumName + "_";
+
+    constexpr auto botName = u8"Somerachan";
+    constexpr auto iconImage = "https://example.com/a.jpg";
+
+    slack.chatPostMessage(
+        channelId,
+        message,
+        botName,
+        iconImage,
+        [](std::string json) {
+            std::cout << json << std::endl;
+        });
+}
+#endif
 
 } // unnamed namespace
 
@@ -112,9 +162,10 @@ int main(int argc, char *argv[])
 //        std::cout << json << std::endl;
 //    });
 
+    const std::string channelName = u8"general";
     std::string channelId;
     slack.channelsList([&](std::vector<somera::SlackChannel> channels) {
-        auto iter = findChannel(channels, u8"sandbox");
+        auto iter = findChannel(channels, channelName);
         if (iter != channels.end()) {
             channelId = iter->id;
         }
@@ -126,39 +177,53 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-//    slack.channelsHistory(channelId, [](const somera::SlackHistory& history) {
-//        for (auto & message : history.messages) {
+    slack.channelsHistory(channelId, [&](somera::SlackHistory history) {
+        std::reverse(std::begin(history.messages), std::end(history.messages));
+
+        std::ofstream stream("nyan.md");
+
+        stream << "# " << channelName << std::endl;
+        stream << std::endl;
+
+        std::chrono::system_clock::time_point prevTimestamp;
+        if (!history.messages.empty()) {
+            prevTimestamp = history.messages.front().timestamp;
+        }
+
+        for (auto & message : history.messages) {
+            if (message.type != "message") {
+                continue;
+            }
+            if (message.subtype == "channel_join") {
+                continue;
+            }
+            if (message.subtype == "file_share") {
+                continue;
+            }
+            if (message.timestamp - prevTimestamp > std::chrono::minutes(5)) {
+                stream << "----" << std::endl;
+                stream << std::endl;
+            }
+
+            // NOTE: Insertion linebreak for markdown's list
+            std::regex re(R"((^[^\-][^\n]*\n)(\-\s[^\n]+))");
+            auto result = std::regex_replace(message.text, re, "$1\n$2");
+            result = StringHelper::replace(result, "&gt;", ">");
+            result = StringHelper::replace(result, "&lt;", "<");
+
+            stream << result << std::endl;
+            stream << std::endl;
+            prevTimestamp = message.timestamp;
 //            std::cout << message.user << std::endl;
 //            std::cout << message.text << std::endl;
 //            std::cout << message.channel << std::endl;
 //            std::cout << message.type << std::endl;
 //            std::cout << message.ts << std::endl;
 //            std::cout << "------" << std::endl;
-//        }
-//    });
+        }
 
-    auto track = somera::iTunesNowPlaying::getCurrentTrack();
-    if (!track) {
-        std::cout << "Your iTunes is not enabled." << std::endl;
-        return 0;
-    }
-
-    std::string message;
-    message += u8":saxophone: ";
-    message += "*" + track->trackName + "*" + "  ";
-    message += u8":simple_smile: ";
-    message += "_" + track->artistName + "_" + "  ";
-    message += u8":cd: ";
-    message += "_" + track->albumName + "_";
-
-    slack.chatPostMessage(
-        channelId,
-        message,
-        u8"Somera-chan",
-        "https://example.com/a.jpg",
-        [](std::string json) {
-            std::cout << json << std::endl;
-        });
+        std::cout << "success." << std::endl;
+    });
 
     return 0;
 }
