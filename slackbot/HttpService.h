@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "../somerachan/src/optional.h"
 extern "C" {
 #include <curl/curl.h>
 }
@@ -16,16 +17,38 @@ extern "C" {
 
 namespace somera {
 
+enum class HttpRequestMethod {
+    HEAD,
+    POST,
+    GET,
+    PUT,
+    DELETE,
+};
+
+struct HttpRequestOptions {
+    Optional<std::string> hostname;
+    Optional<std::string> path;
+    Optional<int> port;
+    Optional<HttpRequestMethod> method;
+    Optional<std::string> postFields;
+    Optional<std::string> agent;
+    std::map<std::string, std::string> headers;
+};
+
 class HttpRequest {
 private:
-    std::function<void(bool error, std::vector<std::uint8_t> const& data)> callback;
+    std::function<void(bool error, const std::vector<std::uint8_t>& data)> callback;
     std::vector<std::uint8_t> blob;
     CURL* curl;
 
 public:
     HttpRequest(
-        std::string const& uri,
-        std::function<void(bool error, std::vector<std::uint8_t> const& data)> callback);
+        const std::string& url,
+        std::function<void(bool error, const std::vector<std::uint8_t>& data)> callback);
+
+    HttpRequest(
+        const HttpRequestOptions& options,
+        std::function<void(bool error, const std::vector<std::uint8_t>& data)> callback);
 
     ~HttpRequest();
 
@@ -56,8 +79,8 @@ public:
     HttpService();
     ~HttpService();
 
-    HttpService(HttpService const&) = delete;
-    HttpService & operator=(HttpService const&) = delete;
+    HttpService(const HttpService&) = delete;
+    HttpService & operator=(const HttpService&) = delete;
 
     void setTimeout(const std::chrono::seconds& timeout);
 
@@ -65,9 +88,13 @@ public:
 
     void waitAll();
 
+    void request(
+        const HttpRequestOptions& options,
+        std::function<void(bool, const std::vector<std::uint8_t>&)> callback);
+
     void get(
-        std::string const& uri,
-        std::function<void(bool, std::vector<std::uint8_t> const&)> callback);
+        const std::string& uri,
+        std::function<void(bool, const std::vector<std::uint8_t>&)> callback);
 
     bool empty() const;
 };

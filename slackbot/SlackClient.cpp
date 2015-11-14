@@ -1,74 +1,13 @@
 // Copyright (c) 2015 mogemimi. Distributed under the MIT license.
 
 #include "SlackClient.h"
+#include "HttpUtility.h"
 #include <rapidjson/document.h>
 #include <cstdint>
 #include <sstream>
-#include <regex>
 #include <utility>
 
 namespace somera {
-namespace {
-
-char toHex(char code)
-{
-    constexpr auto hex = "0123456789ABCDEF";
-    return hex[code & 15];
-}
-
-bool isSafeCharacter(uint32_t u32)
-{
-    return ::isalnum(u32)
-        || ('-' == u32)
-        || ('.' == u32)
-        || ('_' == u32)
-        || ('~' == u32);
-}
-
-std::string encodeURIComponent(const std::string& source)
-{
-    std::stringstream stream;
-    for (const auto& c : source) {
-        if (isSafeCharacter(c)) {
-            stream << c;
-        } else {
-            stream << '%' << toHex(c >> 4) << toHex(c & 15);
-        }
-    }
-    return stream.str();
-}
-
-namespace QueryString {
-
-std::string concatRequestUrl(
-    const std::string& hostName,
-    const std::string& path,
-    const std::string& postData)
-{
-    std::stringstream stream;
-    stream << hostName << path;
-    if (!postData.empty()) {
-        stream << '?' << postData;
-    }
-    return stream.str();
-}
-
-std::string stringify(const std::map<std::string, std::string>& params)
-{
-    std::stringstream stream;
-    bool needAmpersand = false;
-    for (auto & pair : params) {
-        if (needAmpersand) {
-            stream << '&';
-        }
-        stream << pair.first << '=' << encodeURIComponent(pair.second);
-        needAmpersand = true;
-    }
-    return stream.str();
-}
-
-} // namespace QueryString
-} // unnamed namespace
 
 SlackClient::SlackClient()
 {
@@ -85,16 +24,16 @@ void SlackClient::apiCall(
     assert(!token.empty());
     params["token"] = token;
 
-    constexpr auto hostName = "https://slack.com";
-    const auto postData = QueryString::stringify(params);
+    const auto postData = HttpUtility::stringify(params);
 
-    const auto url = QueryString::concatRequestUrl(
-        hostName,
-        "/api/" + method,
-        postData);
+    somera::HttpRequestOptions options;
+    options.hostname = "https://slack.com";
+    options.path = "/api/" + method;
+    options.postFields = postData;
+    options.method = HttpRequestMethod::POST;
 
-    http.get(url,
-        [callback = std::move(callbackIn), this](bool error, std::vector<std::uint8_t> const& blob) {
+    http.request(options,
+        [callback = std::move(callbackIn), this](bool error, const std::vector<std::uint8_t>& blob) {
             if (error) {
                 this->emitError("Failed to call 'api.test'");
                 return;

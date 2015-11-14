@@ -15,8 +15,11 @@
       'type': 'executable',
       'include_dirs': [
         'rapidjson/include',
+        '../somerachan/src',
       ],
       'sources': [
+        'HttpUtility.cpp',
+        'HttpUtility.h',
         'HttpService.cpp',
         'HttpService.h',
         'iTunesNowPlaying.cpp',
@@ -26,6 +29,7 @@
         'SlackClient.h',
         'TerminalHelper.cpp',
         'TerminalHelper.h',
+        '../somerachan/src/optional.h',
       ],
     },
   ],

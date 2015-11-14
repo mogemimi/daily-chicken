@@ -7,23 +7,64 @@
 namespace somera {
 
 HttpRequest::HttpRequest(
-    std::string const& uri,
-    std::function<void(bool error, std::vector<std::uint8_t> const& data)> callbackIn)
+    const HttpRequestOptions& options,
+    std::function<void(bool error, const std::vector<std::uint8_t>& data)> callbackIn)
     : callback(callbackIn)
     , curl(nullptr)
 {
     curl = curl_easy_init();
-
     if (curl == nullptr) {
         throw std::runtime_error("curl_easy_init() failed");
     }
 
+    std::string uri;
+    if (options.hostname) {
+        uri += *options.hostname;
+    }
+    if (options.path) {
+        uri += *options.path;
+    }
+    if (!uri.empty()) {
+        curl_easy_setopt(curl, CURLOPT_URL, uri.c_str());
+    }
+
+    if (options.postFields && !options.postFields->empty()) {
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, options.postFields->c_str());
+    }
+    if (options.agent && !options.agent->empty()) {
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, options.agent->c_str());
+    }
+    if (options.port) {
+        curl_easy_setopt(curl, CURLOPT_PORT, *options.port);
+    }
+    if (options.method) {
+        if (*options.method == HttpRequestMethod::POST) {
+            curl_easy_setopt(curl, CURLOPT_POST, 1);
+        }
+    }
+    if (!options.headers.empty()) {
+        // TODO: Please add implementation.
+    }
+
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, this);
+//    curl_easy_setopt(curl, CURLOPT_HEADER, 0L);
+//    curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L);
+}
+
+HttpRequest::HttpRequest(
+    const std::string& uri,
+    std::function<void(bool error, const std::vector<std::uint8_t>& data)> callbackIn)
+    : callback(callbackIn)
+    , curl(nullptr)
+{
+    curl = curl_easy_init();
+    if (curl == nullptr) {
+        throw std::runtime_error("curl_easy_init() failed");
+    }
     curl_easy_setopt(curl, CURLOPT_URL, uri.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, this);
-//    curl_easy_setopt(curl, CURLOPT_USERAGENT, "libcurl-agent/1.0");
-//    curl_easy_setopt(curl, CURLOPT_HEADER, 0L);
-//    curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L);
 }
 
 HttpRequest::~HttpRequest()
@@ -54,11 +95,9 @@ size_t HttpRequest::writeCallback(
 {
     auto userData = reinterpret_cast<HttpRequest*>(userPointer);
     auto & blob = userData->blob;
-
-    auto inputSize = size * nmemb;
+    const auto inputSize = size * nmemb;
     blob.resize(blob.size() + inputSize);
     std::memcpy(blob.data() + blob.size() - inputSize, contents, inputSize);
-
     return inputSize;
 }
 
@@ -144,9 +183,25 @@ void HttpService::waitAll()
     }
 }
 
+void HttpService::request(
+    const HttpRequestOptions& options,
+    std::function<void(bool, const std::vector<std::uint8_t>&)> callback)
+{
+    auto request = std::make_unique<HttpRequest>(options, callback);
+    if (timeout > decltype(timeout)::zero()) {
+        request->setTimeout(timeout);
+    }
+
+    auto result = curl_multi_add_handle(multiHandle, request->getCurl());
+    if (result != CURLE_OK) {
+        throw std::runtime_error("curl_multi_add_handle() failed");
+    }
+    sessions.emplace(request->getCurl(), std::move(request));
+}
+
 void HttpService::get(
-    std::string const& uri,
-    std::function<void(bool, std::vector<std::uint8_t> const&)> callback)
+    const std::string& uri,
+    std::function<void(bool, const std::vector<std::uint8_t>&)> callback)
 {
     auto request = std::make_unique<HttpRequest>(uri, callback);
     if (timeout > decltype(timeout)::zero()) {
