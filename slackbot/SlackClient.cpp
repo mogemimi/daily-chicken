@@ -175,33 +175,43 @@ void SlackClient::authTest(std::function<void(std::string)> callback)
 }
 
 void SlackClient::chatPostMessage(
-    const std::string& channel,
-    const std::string& text,
-    const std::string& username,
-    const std::string& icon_url,
+    const SlackChatPostMessageOptions& options,
     std::function<void(std::string)> callback)
 {
     std::map<std::string, std::string> params;
-    params["channel"] = channel;
-    params["text"] = text;
-    if (!username.empty()) {
-        params["username"] = username;
-    }
-    if (!icon_url.empty()) {
-        params["icon_url"] = icon_url;
-    }
+    params["channel"] = options.channel;
+    params["text"] = options.text;
 
+    if (options.username) {
+        params["username"] = *options.username;
+    }
+    if (options.icon_url) {
+        params["icon_url"] = *options.icon_url;
+    }
+    if (options.icon_emoji) {
+        params["icon_emoji"] = *options.icon_emoji;
+    }
+    if (options.as_user && *options.as_user) {
+        params["as_user"] = "true";
+    }
     apiCall("chat.postMessage", std::move(params), std::move(callback));
 }
 
 void SlackClient::channelsHistory(
-    const std::string& channel,
+    const SlackChannelsHistoryOptions& options,
     std::function<void(SlackHistory)> callbackIn)
 {
-    assert(!channel.empty());
-
     std::map<std::string, std::string> params;
-    params["channel"] = channel;
+    params["channel"] = options.channel;
+    if (options.count) {
+        params["channel"] = std::to_string(*options.count);
+    }
+    if (options.latest) {
+        params["latest"] = *options.latest;
+    }
+    if (options.oldest) {
+        params["oldest"] = *options.oldest;
+    }
 
     auto callbackWrapper = [callback = std::move(callbackIn), this](const std::string& json) {
         rapidjson::Document doc;
@@ -241,18 +251,17 @@ void SlackClient::channelsHistory(
                     std::fprintf(stderr, "JSON parse error in %s, %d\n", __FILE__, __LINE__);
                     continue;
                 }
+
                 SlackMessage message;
                 fromJsonMember(message.type, "type", channelObject);
                 fromJsonMember(message.user, "user", channelObject);
                 fromJsonMember(message.text, "text", channelObject);
                 fromJsonMember(message.channel, "channel", channelObject);
                 fromJsonMember(message.subtype, "subtype", channelObject);
-                {
-                    using std::chrono::system_clock;
-                    std::string ts;
-                    fromJsonMember(ts, "ts", channelObject);
-                    message.timestamp = system_clock::from_time_t(::atoi(ts.c_str()));
-                }
+                fromJsonMember(message.ts, "ts", channelObject);
+                using std::chrono::system_clock;
+                message.timestamp = system_clock::from_time_t(::atoi(message.ts.c_str()));
+
                 history.messages.push_back(std::move(message));
             }
         }

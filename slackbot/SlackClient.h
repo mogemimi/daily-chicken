@@ -41,6 +41,7 @@ struct SlackMessage {
     std::string user;
     std::string text;
     std::string subtype;
+    std::string ts;
     std::chrono::system_clock::time_point timestamp;
 };
 
@@ -48,6 +49,22 @@ struct SlackHistory {
     std::vector<SlackMessage> messages;
     std::string latest;
     bool has_more;
+};
+
+struct SlackChatPostMessageOptions {
+    std::string channel;
+    std::string text;
+    Optional<std::string> username;
+    Optional<std::string> icon_url;
+    Optional<std::string> icon_emoji;
+    Optional<bool> as_user;
+};
+
+struct SlackChannelsHistoryOptions {
+    std::string channel;
+    Optional<std::string> latest;
+    Optional<std::string> oldest;
+    Optional<int> count;
 };
 
 class SlackClient final {
@@ -86,15 +103,12 @@ public:
 
     /// See https://api.slack.com/methods/channels.history
     void channelsHistory(
-        const std::string& channel,
+        const SlackChannelsHistoryOptions& options,
         std::function<void(SlackHistory)> callback);
 
     /// See https://api.slack.com/methods/chat.postMessage
     void chatPostMessage(
-        const std::string& channel,
-        const std::string& text,
-        const std::string& username,
-        const std::string& icon_url,
+        const SlackChatPostMessageOptions& options,
         std::function<void(std::string)> callback);
 
     void onError(std::function<void(std::string)> callback);

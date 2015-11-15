@@ -36,25 +36,47 @@ struct CommandLineParser {
         if (argc >= 1) {
             executablePath = argv[0];
         }
+        std::string key;
         for (int i = 1; i < argc; i++) {
-            arguments.emplace_back(argv[i]);
+            if (key.empty() || (*argv[i]) == '-') {
+                key = argv[i];
+                arguments[key];
+            }
+            else {
+                arguments[key] = argv[i];
+            }
         }
     }
 
     bool exists(const std::string& flag) const
     {
-        auto iter = std::find(std::begin(arguments), std::end(arguments), flag);
+        auto iter = arguments.find(flag);
         return iter != std::end(arguments);
+    }
+
+    std::string get(const std::string& flag) const
+    {
+        auto iter = arguments.find(flag);
+        if (iter != std::end(arguments)) {
+            return iter->second;
+        }
+        return "";
     }
 
 private:
     std::string executablePath;
-    std::vector<std::string> arguments;
+    std::map<std::string, std::string> arguments;
 };
 
-#if 0
-void chatNowPlaying(somera::SlackClient & slack, const std::string& channelId)
+void chatNowPlayingMusic(somera::SlackClient & slack, const std::string& channelName)
 {
+    auto channel = slack.getChannelByName(channelName);
+    if (!channel) {
+        // error
+        std::cout << "Could not find channel." << std::endl;
+        return;
+    }
+
     auto track = somera::iTunesNowPlaying::getCurrentTrack();
     if (!track) {
         std::cout << "Your iTunes is not enabled." << std::endl;
@@ -69,19 +91,122 @@ void chatNowPlaying(somera::SlackClient & slack, const std::string& channelId)
     message += u8":cd: ";
     message += "_" + track->albumName + "_";
 
-    constexpr auto botName = u8"Somerachan";
-    constexpr auto iconImage = "https://example.com/a.jpg";
-
     slack.chatPostMessage(
-        channelId,
-        message,
-        botName,
-        iconImage,
+        somera::SlackChatPostMessageOptions {
+            .channel = channel->id,
+            .text = message,
+            .as_user =  true,
+        },
         [](std::string json) {
             std::cout << json << std::endl;
         });
 }
-#endif
+
+void historyToMarkdown(
+    somera::SlackClient & slack,
+    const std::string& channelName,
+    const std::string& markdownFileName)
+{
+    auto channel = slack.getChannelByName(channelName);
+    if (!channel) {
+        // error
+        std::cout << "Could not find channel." << std::endl;
+        return;
+    }
+
+    bool hasMore = true;
+    somera::Optional<std::string> latest;
+
+    std::vector<somera::SlackMessage> messages;
+
+    while (hasMore) {
+        slack.channelsHistory(
+            somera::SlackChannelsHistoryOptions {
+                .channel = channel->id,
+                .latest = latest,
+            },
+            [&](somera::SlackHistory history) {
+                messages.insert(
+                    std::end(messages),
+                    history.messages.begin(),
+                    history.messages.end());
+                hasMore = history.has_more;
+                latest = history.messages.back().ts;
+                if (hasMore) {
+                    std::cout << "read more..." << std::endl;
+                } else {
+                    std::cout << "completed." << std::endl;
+                }
+            });
+    }
+
+    std::ofstream stream(markdownFileName);
+
+    stream << "# " << channelName << std::endl;
+    stream << std::endl;
+
+    std::reverse(std::begin(messages), std::end(messages));
+    std::chrono::system_clock::time_point prevTimestamp;
+    if (!messages.empty()) {
+        prevTimestamp = messages.front().timestamp;
+    }
+
+    for (auto & message : messages) {
+        if (message.type != "message") {
+            continue;
+        }
+        if (message.subtype == "channel_join") {
+            continue;
+        }
+        if (message.subtype == "file_share") {
+            continue;
+        }
+        if (message.timestamp - prevTimestamp > std::chrono::minutes(5)) {
+            stream << "----" << std::endl;
+            stream << std::endl;
+        }
+
+        // NOTE: Insertion linebreak for markdown's list
+        std::regex re(R"((^[^\-][^\n]*\n)(\-\s[^\n]+))");
+        auto result = std::regex_replace(message.text, re, "$1\n$2");
+        result = StringHelper::replace(result, "&gt;", ">");
+        result = StringHelper::replace(result, "&lt;", "<");
+
+        stream << result << std::endl;
+        stream << std::endl;
+        prevTimestamp = message.timestamp;
+    }
+}
+
+void showHelp()
+{
+    std::printf("%*s %s\n", 18,
+        "-h", "Show help documents");
+    std::printf("%*s %s\n", 18,
+        "-help", "Show help documents");
+    std::printf("%*s %s\n", 18,
+        "-token-from-env", "Get the access token from environment path");
+    std::printf("%*s %s\n", 18,
+        "-token-from-file", "Get the access token from file");
+
+    std::printf("%*s %s\n", 18,
+        "-nowplaying", "Chat now playing music.");
+    std::printf("%*s %s\n", 18,
+        "-history-markdown", "Write channel history to markdown file");
+    std::printf("%*s %s\n", 18,
+        "-api-test", "Call 'api.test' method");
+    std::printf("%*s %s\n", 18,
+        "-auth-test", "Call 'auth.test' method");
+
+    std::cout
+        << std::endl
+        << "### Example ###" << std::endl
+        << "# ./slackbot -nowplaying -channel general" << std::endl
+        << "# ./slackbot -history-markdown -channel general" << std::endl
+        << "# ./slackbot -history-markdown -channel general -file readme.md" << std::endl
+        << "# ./slackbot -api-test" << std::endl
+        << "# ./slackbot -auth-test" << std::endl;
+}
 
 } // unnamed namespace
 
@@ -90,14 +215,7 @@ int main(int argc, char *argv[])
     CommandLineParser parser(argc, argv);
 
     if (parser.exists("-h") || parser.exists("-help")) {
-        std::printf("%*s %s\n", 15,
-            "-h", "Show help documents");
-        std::printf("%*s %s\n", 15,
-            "-help", "Show help documents");
-        std::printf("%*s %s\n", 15,
-            "-token-from-env", "Get the access token from environment path");
-        std::printf("%*s %s\n", 15,
-            "-token-from-file", "Get the access token from file");
+        showHelp();
         return 0;
     }
 
@@ -132,61 +250,37 @@ int main(int argc, char *argv[])
 
     slack.login();
 
-    const std::string channelName = u8"general";
-    auto channel = slack.getChannelByName(channelName);
-
-    if (!channel) {
-        // error
-        std::cout << "Could not find channel." << std::endl;
-        return 1;
+    if (parser.exists("-nowplaying")) {
+        std::string channel = parser.get("-channel");
+        if (!slack.getChannelByName(channel)) {
+            std::printf("Channot find channel.");
+        }
+        chatNowPlayingMusic(slack, channel);
     }
-
-    slack.channelsHistory(channel->id, [&](somera::SlackHistory history) {
-        std::reverse(std::begin(history.messages), std::end(history.messages));
-
-        std::ofstream stream("nyan.md");
-
-        stream << "# " << channelName << std::endl;
-        stream << std::endl;
-
-        std::chrono::system_clock::time_point prevTimestamp;
-        if (!history.messages.empty()) {
-            prevTimestamp = history.messages.front().timestamp;
+    else if (parser.exists("-history-markdown")) {
+        std::string channel = parser.get("-channel");
+        if (!slack.getChannelByName(channel)) {
+            std::printf("Channot find channel.");
         }
 
-        for (auto & message : history.messages) {
-            if (message.type != "message") {
-                continue;
-            }
-            if (message.subtype == "channel_join") {
-                continue;
-            }
-            if (message.subtype == "file_share") {
-                continue;
-            }
-            if (message.timestamp - prevTimestamp > std::chrono::minutes(5)) {
-                stream << "----" << std::endl;
-                stream << std::endl;
-            }
-
-            // NOTE: Insertion linebreak for markdown's list
-            std::regex re(R"((^[^\-][^\n]*\n)(\-\s[^\n]+))");
-            auto result = std::regex_replace(message.text, re, "$1\n$2");
-            result = StringHelper::replace(result, "&gt;", ">");
-            result = StringHelper::replace(result, "&lt;", "<");
-
-            stream << result << std::endl;
-            stream << std::endl;
-            prevTimestamp = message.timestamp;
-//            std::cout << message.user << std::endl;
-//            std::cout << message.text << std::endl;
-//            std::cout << message.channel << std::endl;
-//            std::cout << message.type << std::endl;
-//            std::cout << message.ts << std::endl;
-//            std::cout << "------" << std::endl;
+        std::string outputFile = channel + ".md";
+        if (parser.exists("-file")) {
+            outputFile = parser.get("-file");
         }
-        std::cout << "success." << std::endl;
-    });
-
+        historyToMarkdown(slack, channel, outputFile);
+    }
+    else if (parser.exists("-api-test")) {
+        slack.apiTest([](const std::string& json) {
+            std::cout << json << std::endl;
+        });
+    }
+    else if (parser.exists("-auth-test")) {
+        slack.authTest([](const std::string& json) {
+            std::cout << json << std::endl;
+        });
+    }
+    else {
+        showHelp();
+    }
     return 0;
 }
