@@ -10,25 +10,6 @@
 #include <regex>
 
 namespace {
-
-template <typename Container, typename Func, typename T>
-auto findIf(const Container& container, Func thunk, const T& value)
-    -> typename Container::const_iterator
-{
-    return std::find_if(std::begin(container), std::end(container),
-            [&](const typename Container::value_type& v) {
-                return thunk(v) == value;
-            });
-}
-
-auto findChannel(const std::vector<somera::SlackChannel>& channels, const std::string& name)
-    -> decltype(channels.begin())
-{
-    return findIf(channels,
-        [](const somera::SlackChannel& channel){ return channel.name; },
-        name);
-}
-
 namespace StringHelper {
 
 std::string replace(const std::string& source, const std::string& from, const std::string& to)
@@ -143,41 +124,24 @@ int main(int argc, char *argv[])
         }
     }
 
-    somera::SlackClient slack;
-    slack.setToken(token);
+    somera::SlackClient slack(token);
 
     slack.onError([](std::string message) {
         std::cout << message << std::endl;
     });
 
-//    slack.apiTest([](std::string json) {
-//        std::cout << json << std::endl;
-//    });
-
-//    slack.apiTest().then([](std::string json) {
-//        std::cout << json << std::endl;
-//    });
-
-//    slack.authTest([](std::string json) {
-//        std::cout << json << std::endl;
-//    });
+    slack.login();
 
     const std::string channelName = u8"general";
-    std::string channelId;
-    slack.channelsList([&](std::vector<somera::SlackChannel> channels) {
-        auto iter = findChannel(channels, channelName);
-        if (iter != channels.end()) {
-            channelId = iter->id;
-        }
-    });
+    auto channel = slack.getChannelByName(channelName);
 
-    if (channelId.empty()) {
+    if (!channel) {
         // error
         std::cout << "Could not find channel." << std::endl;
         return 1;
     }
 
-    slack.channelsHistory(channelId, [&](somera::SlackHistory history) {
+    slack.channelsHistory(channel->id, [&](somera::SlackHistory history) {
         std::reverse(std::begin(history.messages), std::end(history.messages));
 
         std::ofstream stream("nyan.md");
@@ -221,7 +185,6 @@ int main(int argc, char *argv[])
 //            std::cout << message.ts << std::endl;
 //            std::cout << "------" << std::endl;
         }
-
         std::cout << "success." << std::endl;
     });
 

@@ -55,20 +55,39 @@ private:
     somera::HttpService http;
     std::string token;
     std::function<void(const std::string&)> errorCallback;
+    std::vector<SlackChannel> channels;
 
 public:
-    SlackClient();
+    explicit SlackClient(const std::string& token);
 
-    void setToken(const std::string& tokenIn);
+    void login();
 
-    /// See https://api.slack.com/methods/api.test
+    Optional<SlackChannel> getChannelByID(const std::string& id);
+
+    Optional<SlackChannel> getChannelByName(const std::string& name);
+
+    ///@brief See https://api.slack.com/methods/api.test
+    ///@example
+    /// ```
+    /// slack.apiTest([](std::string json) {
+    ///     std::cout << json << std::endl;
+    /// });
+    /// ```
     void apiTest(std::function<void(std::string)> callback);
 
-    /// See https://api.slack.com/methods/auth.test
+    ///@brief See https://api.slack.com/methods/auth.test
+    ///@example
+    /// ```
+    /// slack.authTest([](std::string json) {
+    ///     std::cout << json << std::endl;
+    /// });
+    /// ```
     void authTest(std::function<void(std::string)> callback);
 
-    /// See https://api.slack.com/methods/channels.list
-    void channelsList(std::function<void(std::vector<SlackChannel>)> callback);
+    /// See https://api.slack.com/methods/channels.history
+    void channelsHistory(
+        const std::string& channel,
+        std::function<void(SlackHistory)> callback);
 
     /// See https://api.slack.com/methods/chat.postMessage
     void chatPostMessage(
@@ -77,11 +96,6 @@ public:
         const std::string& username,
         const std::string& icon_url,
         std::function<void(std::string)> callback);
-
-    /// See https://api.slack.com/methods/channels.history
-    void channelsHistory(
-        const std::string& channel,
-        std::function<void(SlackHistory)> callback);
 
     void onError(std::function<void(std::string)> callback);
 

@@ -8,10 +8,115 @@
 #include <utility>
 
 namespace somera {
+namespace {
 
-SlackClient::SlackClient()
+void fromJson(std::string& output, const rapidjson::Value& value)
+{
+    if (value.IsString()) {
+        output = value.GetString();
+    }
+}
+
+void fromJson(int& output, const rapidjson::Value& value)
+{
+    if (value.IsInt()) {
+        output = value.GetInt();
+    }
+}
+
+void fromJson(bool& output, const rapidjson::Value& value)
+{
+    if (value.IsBool()) {
+        output = value.GetBool();
+    }
+}
+
+template <typename T>
+void fromJsonMember(T& output, const std::string& name, const rapidjson::Value& object)
+{
+    assert(object.IsObject());
+    assert(!name.empty());
+    if (object.HasMember(name.c_str())) {
+        fromJson(output, object[name.c_str()]);
+    }
+}
+
+template <typename Container, typename Func, typename T>
+auto find(const Container& container, Func thunk, const T& value)
+    -> typename Container::const_iterator
+{
+    return std::find_if(std::begin(container), std::end(container),
+            [&](const typename Container::value_type& v) {
+                return thunk(v) == value;
+            });
+}
+
+} // namespace
+
+SlackClient::SlackClient(const std::string& tokenIn)
+    : token(tokenIn)
 {
     http.setTimeout(std::chrono::seconds(60));
+}
+
+void SlackClient::login()
+{
+    // NOTE: Please see https://api.slack.com/methods/channels.list
+    apiCall("channels.list", {}, [this](const std::string& json) {
+        rapidjson::Document doc;
+        doc.Parse(json.c_str());
+
+        if (doc.HasParseError()) {
+            this->emitError("Failed to parse JSON");
+            return;
+        }
+        if (!doc.IsObject()
+            || !doc.HasMember("ok") || !doc["ok"].IsBool()
+            || !doc.HasMember("channels") || !doc["channels"].IsArray()
+            ) {
+            this->emitError("Invalid JSON");
+            return;
+        }
+        if (!doc["ok"].GetBool()) {
+            this->emitError("Invalid JSON");
+            return;
+        }
+
+        auto & channelsObject = doc["channels"];
+        for (auto c = channelsObject.Begin(); c != channelsObject.End(); ++c) {
+            if (!c->IsObject()) {
+                this->emitError("Invalid JSON");
+                break;
+            }
+            SlackChannel channel;
+            fromJsonMember(channel.id, "id", *c);
+            fromJsonMember(channel.name, "name", *c);
+            fromJsonMember(channel.creator, "creator", *c);
+            fromJsonMember(channel.created, "created", *c);
+            fromJsonMember(channel.is_archived, "is_archived", *c);
+            fromJsonMember(channel.is_general, "is_general", *c);
+            fromJsonMember(channel.is_member, "is_member", *c);
+            channels.push_back(std::move(channel));
+        }
+    });
+}
+
+Optional<SlackChannel> SlackClient::getChannelByID(const std::string& id)
+{
+    auto channel = find(channels, [](const SlackChannel& c){ return c.id; }, id);
+    if (channel != std::end(channels)) {
+        return *channel;
+    }
+    return NullOpt;
+}
+
+Optional<SlackChannel> SlackClient::getChannelByName(const std::string& name)
+{
+    auto channel = find(channels, [](const SlackChannel& c){ return c.name; }, name);
+    if (channel != std::end(channels)) {
+        return *channel;
+    }
+    return NullOpt;
 }
 
 void SlackClient::apiCall(
@@ -59,11 +164,6 @@ void SlackClient::emitError(const std::string& errorMessage)
     }
 }
 
-void SlackClient::setToken(const std::string& tokenIn)
-{
-    this->token = tokenIn;
-}
-
 void SlackClient::apiTest(std::function<void(std::string)> callback)
 {
     apiCall("api.test", {}, std::move(callback));
@@ -72,66 +172,6 @@ void SlackClient::apiTest(std::function<void(std::string)> callback)
 void SlackClient::authTest(std::function<void(std::string)> callback)
 {
     apiCall("auth.test", {}, std::move(callback));
-}
-
-void SlackClient::channelsList(std::function<void(std::vector<SlackChannel>)> callbackIn)
-{
-    apiCall("channels.list", {},
-        [callback = std::move(callbackIn), this](const std::string& json) {
-            rapidjson::Document doc;
-            doc.Parse(json.c_str());
-
-            if (doc.HasParseError()) {
-                this->emitError("Failed to parse JSON");
-                return;
-            }
-
-            if (!doc.IsObject()
-                || !doc.HasMember("ok") || !doc["ok"].IsBool()
-                || !doc.HasMember("channels") || !doc["channels"].IsArray()
-                ) {
-                this->emitError("Invalid JSON");
-                return;
-            }
-
-            if (!doc["ok"].GetBool()) {
-                this->emitError("Invalid JSON");
-                return;
-            }
-
-            std::vector<SlackChannel> channels;
-
-            auto & channelsObject = doc["channels"];
-            for (auto iter = channelsObject.Begin(); iter != channelsObject.End(); ++iter) {
-                const auto& channelObject = (*iter);
-                if (!channelObject.IsObject()
-                    || !channelObject.HasMember("id") || !channelObject["id"].IsString()
-                    || !channelObject.HasMember("name") || !channelObject["name"].IsString()
-                    || !channelObject.HasMember("creator") || !channelObject["creator"].IsString()
-                    || !channelObject.HasMember("created") || !channelObject["created"].IsUint()
-                    || !channelObject.HasMember("is_archived") || !channelObject["is_archived"].IsBool()
-                    || !channelObject.HasMember("is_general") || !channelObject["is_general"].IsBool()
-                    || !channelObject.HasMember("is_member") || !channelObject["is_member"].IsBool()
-                    ) {
-                    // error
-                    continue;
-                }
-
-                SlackChannel channel;
-                channel.id = (*iter)["id"].GetString();
-                channel.name = (*iter)["name"].GetString();
-                channel.creator = (*iter)["creator"].GetString();
-                channel.created = (*iter)["created"].GetInt();
-                channel.is_archived = (*iter)["is_archived"].GetBool();
-                channel.is_general = (*iter)["is_general"].GetBool();
-                channel.is_member = (*iter)["is_member"].GetBool();
-                channels.push_back(std::move(channel));
-            }
-
-            if (callback) {
-                callback(std::move(channels));
-            }
-        });
 }
 
 void SlackClient::chatPostMessage(
@@ -188,55 +228,31 @@ void SlackClient::channelsHistory(
         }
 
         SlackHistory history;
-
-        if (doc.HasMember("latest") && doc["latest"].IsString()) {
-            history.latest = doc["latest"].GetString();
-        }
-
-        if (doc.HasMember("has_more") && doc["has_more"].IsBool()) {
-            history.has_more = doc["has_more"].GetBool();
-        } else {
-            history.has_more = false;
-        }
+        history.has_more = false;
+        fromJsonMember(history.latest, "latest", doc);
+        fromJsonMember(history.has_more, "has_more", doc);
 
         if (doc.HasMember("messages") && doc["messages"].IsArray()) {
             auto & messagesObject = doc["messages"];
             for (auto iter = messagesObject.Begin(); iter != messagesObject.End(); ++iter) {
                 const auto& channelObject = (*iter);
-                if (!channelObject.IsObject()
-                    || !channelObject.HasMember("type") || !channelObject["type"].IsString()
-                    || !channelObject.HasMember("ts") || !channelObject["ts"].IsString()
-                    ) {
+                if (!channelObject.IsObject()) {
                     // error
                     std::fprintf(stderr, "JSON parse error in %s, %d\n", __FILE__, __LINE__);
                     continue;
                 }
-
                 SlackMessage message;
-                message.type = (*iter)["type"].GetString();
+                fromJsonMember(message.type, "type", channelObject);
+                fromJsonMember(message.user, "user", channelObject);
+                fromJsonMember(message.text, "text", channelObject);
+                fromJsonMember(message.channel, "channel", channelObject);
+                fromJsonMember(message.subtype, "subtype", channelObject);
                 {
-                    auto timestamp = (*iter)["ts"].GetString();
                     using std::chrono::system_clock;
-                    message.timestamp = system_clock::from_time_t(::atoi(timestamp));
+                    std::string ts;
+                    fromJsonMember(ts, "ts", channelObject);
+                    message.timestamp = system_clock::from_time_t(::atoi(ts.c_str()));
                 }
-
-                if (channelObject.HasMember("user")
-                    && channelObject["user"].IsString()) {
-                    message.user = (*iter)["user"].GetString();
-                }
-                if (channelObject.HasMember("text")
-                    && channelObject["text"].IsString()) {
-                    message.text = (*iter)["text"].GetString();
-                }
-                if (channelObject.HasMember("channel")
-                    && channelObject["channel"].IsString()) {
-                    message.channel = (*iter)["channel"].GetString();
-                }
-                if (channelObject.HasMember("subtype")
-                    && channelObject["subtype"].IsString()) {
-                    message.subtype = (*iter)["subtype"].GetString();
-                }
-
                 history.messages.push_back(std::move(message));
             }
         }
