@@ -228,9 +228,8 @@ public:
             }
         });
 
-        std::transform(sourceString.begin(), sourceString.end(), sourceString.begin(), toupper);
-
-        rewriter->ReplaceText(range, sourceString);
+//        std::transform(sourceString.begin(), sourceString.end(), sourceString.begin(), toupper);
+//        rewriter->ReplaceText(range, sourceString);
 
         return false;
     }
@@ -245,15 +244,15 @@ public:
 
     void run(const MatchFinder::MatchResult &result) override
     {
-        if (const IfStmt *ifStatement =
-                result.Nodes.getNodeAs<clang::IfStmt>("ifStmt")) {
-            const Stmt *Then = ifStatement->getThen();
-            rewriter.InsertText(Then->getLocStart(), "// if\n", true, true);
-
-            if (const Stmt *Else = ifStatement->getElse()) {
-                rewriter.InsertText(Else->getLocStart(), "// else\n", true, true);
-            }
-        }
+//        if (const IfStmt *ifStatement =
+//                result.Nodes.getNodeAs<clang::IfStmt>("ifStmt")) {
+//            const Stmt *Then = ifStatement->getThen();
+//            rewriter.InsertText(Then->getLocStart(), "// if\n", true, true);
+//
+//            if (const Stmt *Else = ifStatement->getElse()) {
+//                rewriter.InsertText(Else->getLocStart(), "// else\n", true, true);
+//            }
+//        }
     }
 
 private:
@@ -269,11 +268,22 @@ public:
 
     void run(const MatchFinder::MatchResult &result) override
     {
-        if (const DeclStmt *declStatement =
-                result.Nodes.getNodeAs<clang::DeclStmt>("declStmt")) {
-
-            rewriter.InsertText(declStatement->getLocStart(), "// decl\n", true, true);
-        }
+//        if (const DeclStmt *declStatement =
+//            result.Nodes.getNodeAs<clang::DeclStmt>("declStmt")) {
+//
+//            const auto range = declStatement->getSourceRange();
+//            const auto& sm = *result.SourceManager;
+//            const auto startLoc = sm.getDecomposedLoc(range.getBegin());
+//            const auto endLoc = sm.getDecomposedLoc(range.getEnd());
+//            const auto fileData = sm.getBufferData(startLoc.first);
+//
+//            auto sourceString = fileData.substr(
+//                startLoc.second, endLoc.second - startLoc.second).str();
+//
+//            std::cout << "ok: " <<  sourceString  << std::endl;
+//
+//            rewriter.InsertText(declStatement->getLocStart(), "// decl\n", true, true);
+//        }
     }
 
 private:
@@ -282,11 +292,13 @@ private:
 
 class MyASTConsumer final : public ASTConsumer {
 public:
-    MyASTConsumer(Rewriter &rewriter)
+    MyASTConsumer(Rewriter &rewriter, TypoSet & typosIn)
         : handlerForIf(rewriter)
         , handlerForDeclStmt(rewriter)
+        , typos(typosIn)
     {
         matcher.addMatcher(ifStmt().bind("ifStmt"), &handlerForIf);
+        matcher.addMatcher(declStmt().bind("declStmt"), &handlerForDeclStmt);
         matcher.addMatcher(declStmt().bind("declStmt"), &handlerForDeclStmt);
     }
 
@@ -295,10 +307,120 @@ public:
         matcher.matchAST(context);
     }
 
+    bool HandleTopLevelDecl(clang::DeclGroupRef d) override
+    {
+        for (auto it = d.begin(); it != d.end(); it++)
+        {
+//            {
+//                clang::VarDecl *vd = llvm::dyn_cast<clang::VarDecl>(*it);
+//                if (vd && vd->isFileVarDecl() && !vd->hasExternalStorage()) {
+//                    std::cerr << "Read top-level variable decl: '";
+//                    std::cerr << vd->getDeclName().getAsString();
+//                    std::cerr << std::endl;
+//                }
+//            }
+//            {
+//                auto fd = llvm::dyn_cast<clang::NamedDecl>(*it);
+//                if (fd) {
+//                    std::cerr << "Read top-level variable decl: '";
+//                    std::cerr << fd->getDeclName().getAsString();
+//                    std::cerr << std::endl;
+//                }
+//            }
+//            {
+//                auto fd = llvm::dyn_cast<clang::NamespaceDecl>(*it);
+//                if (fd) {
+//                    std::cerr << "Read top-level variable decl: '";
+//                    std::cerr << fd->getDeclName().getAsString();
+//                    std::cerr << std::endl;
+//                }
+//            }
+//            {
+//                clang::VarDecl *vd = llvm::dyn_cast<clang::VarDecl>(*it);
+//                if (vd) {
+//                    std::cerr << "Read top-level variable decl: '";
+//                    std::cerr << vd->getDeclName().getAsString();
+//                    std::cerr << std::endl;
+//                }
+//            }
+//            {
+//                auto fd = llvm::dyn_cast<clang::FunctionDecl>(*it);
+//                if (fd) {
+//                    std::cerr << "Read top-level variable decl: '";
+//                    std::cerr << fd->getDeclName().getAsString();
+//                    std::cerr << std::endl;
+//                }
+//            }
+
+            auto fd = llvm::dyn_cast<clang::NamedDecl>(*it);
+            if (fd) {
+                std::string identifier = fd->getDeclName().getAsString();
+                auto words = somera::IdentifierWordSegmenter::parse(identifier);
+
+                for (auto & word : words) {
+                    if (word.size() <= 3) {
+                        continue;
+                    }
+                    if (typos.exists(word)) {
+                        continue;
+                    }
+
+                    auto corrections = correctWord(word);
+                    if (!corrections.empty()) {
+                        Typo typo;
+                        typo.typo = word;
+                        typo.corrections = std::move(corrections);
+                        typos.addTypo(std::move(typo));
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
 private:
     IfStmtHandler handlerForIf;
     DeclStmtHandler handlerForDeclStmt;
     MatchFinder matcher;
+    TypoSet & typos;
+};
+
+class MyPPCallbacks : public clang::PPCallbacks {
+public:
+//    {
+//        std::cout << "======" << std::endl;
+////        auto & ci = getCompilerInstance();
+//        clang::Token token;
+//        do {
+//            assert(ci.hasPreprocessor());
+//            auto & preprocessor = ci.getPreprocessor();
+//            auto & diagnosticsEngine = ci.getDiagnostics();
+////            auto & preprocessor = pp;
+////            auto & diagnosticsEngine = pp.getDiagnostics();
+//            if (diagnosticsEngine.hasErrorOccurred()) {
+//                break;
+//            }
+//            if (!preprocessor.isInPrimaryFile()) {
+//                break;
+//            }
+//            //preprocessor.LexNonComment(token);
+//            preprocessor.Lex(token);
+//            if (token.getKind() == tok::comment) {
+//                // is comment
+//            }
+//            //tok::unknown
+//            //identifier
+//            //raw_identifier
+//            //string_literal
+//            //wide_string_literal
+//            //angle_string_literal
+//            //utf8_string_literal
+//            //utf16_string_literal
+//            //utf32_string_literal
+//            preprocessor.DumpToken(token);
+//            std::cerr << std::endl;
+//        } while (token.isNot(clang::tok::eof));
+//    }
 };
 
 class MyFrontendAction final : public ASTFrontendAction {
@@ -395,9 +517,10 @@ public:
         commentHandler.setTypoSet(&typos);
 
         ci.getPreprocessor().addCommentHandler(&commentHandler);
+        ci.getPreprocessor().addPPCallbacks(std::make_unique<MyPPCallbacks>());
 
         rewriter.setSourceMgr(ci.getSourceManager(), ci.getLangOpts());
-        return llvm::make_unique<MyASTConsumer>(rewriter);
+        return std::make_unique<MyASTConsumer>(rewriter, typos);
     }
 
 private:
