@@ -35,8 +35,3 @@ test:
 	@gyp somerachan/test.gyp --depth=. -f xcode
 	@xcodebuild -project somerachan/test.xcodeproj -configuration Release
 	./somerachan/build/Release/SomeraChanTest
-
-slack:
-	@gyp slackbot/slackbot.gyp --depth=. -f xcode
-	@xcodebuild -project slackbot/slackbot.xcodeproj -configuration Release
-	@cp slackbot/build/Release/slackbot bin/slackbot
