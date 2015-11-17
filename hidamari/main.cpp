@@ -1,3 +1,5 @@
+// Copyright (c) 2015 mogemimi. Distributed under the MIT license.
+
 #include <iostream>
 #include <vector>
 #include <string>
@@ -15,7 +17,7 @@ struct CompileOptions {
 
 } // namespace somera
 
-int main()
+int main(int argc, char *argv[])
 {
     std::cout << "finished" << std::endl;
     return 0;

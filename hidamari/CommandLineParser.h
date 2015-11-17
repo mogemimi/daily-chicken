@@ -1,0 +1,65 @@
+// Copyright (c) 2015 mogemimi. Distributed under the MIT license.
+
+#include <string>
+#include <sstream>
+#include <vector>
+#include <functional>
+#include <map>
+#include <set>
+#include <vector>
+
+namespace somera {
+
+namespace StringHelper {
+
+bool startWith(const std::string& source, const std::string& prefix);
+
+} // namespace StringHelper
+
+enum class CommandLineArgumentType {
+    Flag,
+    StartWith,
+};
+
+struct CommandLineArgumentHint {
+    std::string name;
+    std::string help;
+    CommandLineArgumentType type;
+    std::vector<std::string> values;
+};
+
+struct CommandLineParser {
+//    void addArgument(
+//        const std::string& help,
+//        const std::string& type);
+
+    void addArgument(
+        const std::string& flag,
+        CommandLineArgumentType type,
+        const std::string& help);
+
+    void parse(int argc, const char*argv[]);
+
+    bool hasParseError() const;
+
+    std::string getHelpText() const;
+
+    std::string getErrorMessage() const;
+
+    std::string getExecutablePath() const;
+
+    bool exists(const std::string& flag) const;
+
+    std::vector<std::string> getValues(const std::string& name) const;
+
+    std::vector<std::string> getPaths() const;
+
+private:
+    std::string executablePath;
+    std::vector<CommandLineArgumentHint> hints;
+    std::set<std::string> flags;
+    std::vector<std::string> paths;
+    std::stringstream errorMessage;
+};
+
+} // namespace somera

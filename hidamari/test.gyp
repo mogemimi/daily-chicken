@@ -16,7 +16,9 @@
         '../somerachan/iutest/include',
       ],
       'sources': [
-        'tests/commandlineparser.cpp',
+        'CommandLineParser.cpp',
+        'CommandLineParser.h',
+        'tests/CommandLineParser.cpp',
         'tests/main.cpp',
       ],
     },

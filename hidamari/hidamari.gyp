@@ -17,6 +17,8 @@
         '../somerachan/src',
       ],
       'sources': [
+        'CommandLineParser.cpp',
+        'CommandLineParser.h',
         'main.cpp',
       ],
     },
