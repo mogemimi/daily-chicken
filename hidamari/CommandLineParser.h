@@ -38,7 +38,12 @@ struct CommandLineParser {
         CommandLineArgumentType type,
         const std::string& help);
 
-    void parse(int argc, const char*argv[]);
+    void parse(int argc, char* argv[])
+    {
+        this->parse(argc, const_cast<const char**>(argv));
+    }
+
+    void parse(int argc, const char* argv[]);
 
     bool hasParseError() const;
 
