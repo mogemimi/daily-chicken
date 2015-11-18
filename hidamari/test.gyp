@@ -18,6 +18,8 @@
       'sources': [
         'CommandLineParser.cpp',
         'CommandLineParser.h',
+        'StringHelper.cpp',
+        'StringHelper.h',
         'tests/CommandLineParser.cpp',
         'tests/main.cpp',
       ],

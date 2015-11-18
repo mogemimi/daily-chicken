@@ -1,17 +1,12 @@
 // Copyright (c) 2015 mogemimi. Distributed under the MIT license.
 
 #include "CommandLineParser.h"
+#include "StringHelper.h"
 #include <cassert>
 #include <utility>
 #include <algorithm>
 
 namespace somera {
-
-bool StringHelper::startWith(const std::string& text, const std::string& prefix)
-{
-    return (text.size() >= prefix.size())
-        && (text.compare(0, prefix.size(), prefix) == 0);
-}
 
 void CommandLineParser::addArgument(
     const std::string& flag,
@@ -24,11 +19,31 @@ void CommandLineParser::addArgument(
     hint.help = help;
     hint.type = type;
     hints.push_back(std::move(hint));
+
+    using Hint = const CommandLineArgumentHint &;
+    std::sort(std::begin(hints), std::end(hints),
+        [](Hint a, Hint b){ return StringHelper::toLower(a.name) < StringHelper::toLower(b.name); });
 }
 
 std::string CommandLineParser::getHelpText() const
 {
-    return "TODO";
+    const std::string spaces = "                        ";
+    std::stringstream stream;
+    for (auto & hint : hints) {
+        stream << "  ";
+        auto option = hint.name;
+        if (hint.type == CommandLineArgumentType::StartWith) {
+            option += " <value>";
+        }
+        stream << option;
+        if (option.size() < spaces.size()) {
+            stream << spaces.substr(option.size());
+        } else {
+            stream << '\n' << spaces;
+        }
+        stream << hint.help << '\n';
+    }
+    return stream.str();
 }
 
 void CommandLineParser::parse(int argc, const char *argv[])
@@ -65,7 +80,12 @@ void CommandLineParser::parse(int argc, const char *argv[])
             }
         }
         if (!found) {
-            errorMessage << "error: unsupported option'" << argument << "'\n";
+            if (StringHelper::startWith(argument, "--")) {
+                errorMessage << "error: unsupported option: '" << argument << "'\n";
+
+            } else {
+                errorMessage << "error: unknown argument: '" << argument << "'\n";
+            }
         }
     }
 }

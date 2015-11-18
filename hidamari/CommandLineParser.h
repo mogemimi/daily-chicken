@@ -1,5 +1,7 @@
 // Copyright (c) 2015 mogemimi. Distributed under the MIT license.
 
+#pragma once
+
 #include <string>
 #include <sstream>
 #include <vector>
@@ -9,12 +11,6 @@
 #include <vector>
 
 namespace somera {
-
-namespace StringHelper {
-
-bool startWith(const std::string& source, const std::string& prefix);
-
-} // namespace StringHelper
 
 enum class CommandLineArgumentType {
     Flag,

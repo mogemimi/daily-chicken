@@ -19,6 +19,10 @@
       'sources': [
         'CommandLineParser.cpp',
         'CommandLineParser.h',
+        'ProjectTemplate.cpp',
+        'ProjectTemplate.h',
+        'StringHelper.cpp',
+        'StringHelper.h',
         'main.cpp',
       ],
     },
