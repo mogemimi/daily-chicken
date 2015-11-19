@@ -32,7 +32,7 @@ std::string CommandLineParser::getHelpText() const
     for (auto & hint : hints) {
         stream << "  ";
         auto option = hint.name;
-        if (hint.type == CommandLineArgumentType::StartWith) {
+        if (hint.type == CommandLineArgumentType::JoinedOrSeparate) {
             option += " <value>";
         }
         stream << option;
@@ -71,7 +71,7 @@ void CommandLineParser::parse(int argc, const char *argv[])
                     break;
                 }
             }
-            else if (hint.type == CommandLineArgumentType::StartWith) {
+            else if (hint.type == CommandLineArgumentType::JoinedOrSeparate) {
                 if (StringHelper::startWith(argument, hint.name)) {
                     hint.values.push_back(argument.substr(hint.name.size()));
                     found = true;
@@ -125,14 +125,5 @@ std::vector<std::string> CommandLineParser::getPaths() const
 {
     return paths;
 }
-
-//std::string CommandLineParser::get(const std::string& flag) const
-//{
-//    auto iter = arguments.find(flag);
-//    if (iter != std::end(arguments)) {
-//        return iter->second;
-//    }
-//    return "";
-//}
 
 } // namespace somera

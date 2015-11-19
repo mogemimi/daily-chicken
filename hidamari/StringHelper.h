@@ -5,7 +5,6 @@
 #include <string>
 
 namespace somera {
-
 namespace StringHelper {
 
 bool startWith(const std::string& source, const std::string& prefix);
@@ -17,6 +16,16 @@ std::string replace(
     const std::string& from,
     const std::string& to);
 
-} // namespace StringHelper
+std::string format(char const* formatText, ...)
+#if defined(__has_attribute)
+#if __has_attribute(format)
+__attribute__((__format__(printf, 1, 2)));
+#endif
+#elif __GNUC__ >= 4
+__attribute__((__format__(printf, 1, 2)));
+#else
+;
+#endif
 
+} // namespace StringHelper
 } // namespace somera

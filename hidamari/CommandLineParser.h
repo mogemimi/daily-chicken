@@ -14,7 +14,7 @@ namespace somera {
 
 enum class CommandLineArgumentType {
     Flag,
-    StartWith,
+    JoinedOrSeparate,
 };
 
 struct CommandLineArgumentHint {

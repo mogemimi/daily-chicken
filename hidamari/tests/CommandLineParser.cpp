@@ -19,7 +19,7 @@ TEST(CommandLineParser, TrivialCase)
     CommandLineParser parser;
     parser.addArgument("-g", CommandLineArgumentType::Flag,
         "Debug flag");
-    parser.addArgument("-L", CommandLineArgumentType::StartWith,
+    parser.addArgument("-L", CommandLineArgumentType::JoinedOrSeparate,
         "Library search path");
     parser.parse(argc, argv);
 
@@ -47,4 +47,3 @@ TEST(StringHelper, startWith)
     EXPECT_FALSE(startWith("-baka", "baka"));
     EXPECT_FALSE(startWith("baka", "-baka"));
 }
-
