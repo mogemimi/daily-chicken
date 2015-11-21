@@ -3,6 +3,7 @@
 #include "ProjectTemplate.h"
 #include "FileSystem.h"
 #include "StringHelper.h"
+#include "Any.h"
 #include "../somerachan/src/optional.h"
 #include <fstream>
 #include <utility>
@@ -11,6 +12,7 @@
 #include <sstream>
 #include <vector>
 #include <cassert>
+#include <map>
 
 namespace somera {
 namespace {
@@ -57,6 +59,7 @@ struct PBXGroup;
 struct PBXNativeTarget;
 struct PBXProject;
 struct PBXSourcesBuildPhase;
+struct XCBuildConfiguration;
 struct XCConfigurationList;
 
 std::string encodeComment(const std::string& comment)
@@ -129,6 +132,23 @@ struct PBXSourcesBuildPhase final {
     }
 };
 
+struct XCBuildConfiguration final {
+    std::string uuid;
+    std::string isa() const noexcept { return "XCBuildConfiguration"; }
+    std::map<std::string, Any> buildSettings;
+    std::string name;
+
+    void addBuildSettings(const std::string& key, const std::string& value)
+    {
+        buildSettings.emplace(key, value);
+    }
+
+    void addBuildSettings(const std::string& key, const std::vector<std::string>& value)
+    {
+        buildSettings.emplace(key, value);
+    }
+};
+
 struct XCConfigurationList final {
     std::string isa() const noexcept { return "XCConfigurationList"; }
 };
@@ -184,6 +204,13 @@ public:
     {
         beginKeyValue(key);
         stream << value;
+        endKeyValue();
+    }
+
+    void printKeyValue(const std::string& key, const std::function<void()>& valuePrinter)
+    {
+        beginKeyValue(key);
+        valuePrinter();
         endKeyValue();
     }
 
@@ -272,6 +299,21 @@ auto findByPath(Container & c, const std::string& path)
     });
 }
 
+void printObject(XcodePrinter & printer, const std::map<std::string, Any>& object)
+{
+    printer.beginObject();
+    for (auto & pair : object) {
+        auto & key = pair.first;
+        auto & value = pair.second;
+        if (value.is<std::string>()) {
+            printer.printKeyValue(key, value.as<std::string>());
+        }
+        else if (pair.second.is<std::vector<std::string>>()) {
+            printer.printKeyValue(key, value.as<std::vector<std::string>>());
+        }
+    }
+    printer.endObject();
+}
 
 void printObjects(XcodePrinter & printer)
 {
@@ -312,6 +354,103 @@ void printObjects(XcodePrinter & printer)
         }
         pbxSourcesBuildPhaseList.push_back(std::move(phase));
     }
+
+    std::vector<XCBuildConfiguration> buildConfigurations;
+    {
+        XCBuildConfiguration config;
+        config.uuid = "A932DE8D1BFCD3CC0006E050";
+        config.name = "Debug";
+        config.addBuildSettings("PRODUCT_NAME", "\"$(TARGET_NAME)\"");
+        config.addBuildSettings("ALWAYS_SEARCH_USER_PATHS", "NO");
+        config.addBuildSettings("CLANG_CXX_LANGUAGE_STANDARD", "\"gnu++0x\"");
+        config.addBuildSettings("CLANG_CXX_LIBRARY", "\"libc++\"");
+        config.addBuildSettings("CLANG_ENABLE_MODULES", "YES");
+        config.addBuildSettings("CLANG_ENABLE_OBJC_ARC", "YES");
+        config.addBuildSettings("CLANG_WARN_BOOL_CONVERSION", "YES");
+        config.addBuildSettings("CLANG_WARN_CONSTANT_CONVERSION", "YES");
+        config.addBuildSettings("CLANG_WARN_DIRECT_OBJC_ISA_USAGE", "YES_ERROR");
+        config.addBuildSettings("CLANG_WARN_EMPTY_BODY", "YES");
+        config.addBuildSettings("CLANG_WARN_ENUM_CONVERSION", "YES");
+        config.addBuildSettings("CLANG_WARN_INT_CONVERSION", "YES");
+        config.addBuildSettings("CLANG_WARN_OBJC_ROOT_CLASS", "YES_ERROR");
+        config.addBuildSettings("CLANG_WARN_UNREACHABLE_CODE", "YES");
+        config.addBuildSettings("CLANG_WARN__DUPLICATE_METHOD_MATCH", "YES");
+        config.addBuildSettings("CODE_SIGN_IDENTITY", "\"-\"");
+        config.addBuildSettings("COPY_PHASE_STRIP", "NO");
+        config.addBuildSettings("DEBUG_INFORMATION_FORMAT", "dwarf");
+        config.addBuildSettings("ENABLE_STRICT_OBJC_MSGSEND", "YES");
+        config.addBuildSettings("ENABLE_TESTABILITY", "YES");
+        config.addBuildSettings("GCC_C_LANGUAGE_STANDARD", "gnu99");
+        config.addBuildSettings("GCC_DYNAMIC_NO_PIC", "NO");
+        config.addBuildSettings("GCC_NO_COMMON_BLOCKS", "YES");
+        config.addBuildSettings("GCC_OPTIMIZATION_LEVEL", "0");
+        config.addBuildSettings("GCC_PREPROCESSOR_DEFINITIONS", std::vector<std::string>{
+            "\"DEBUG=1\"",
+            "\"$(inherited)\"",
+        });
+        config.addBuildSettings("GCC_WARN_64_TO_32_BIT_CONVERSION", "YES");
+        config.addBuildSettings("GCC_WARN_ABOUT_RETURN_TYPE", "YES_ERROR");
+        config.addBuildSettings("GCC_WARN_UNDECLARED_SELECTOR", "YES");
+        config.addBuildSettings("GCC_WARN_UNINITIALIZED_AUTOS", "YES_AGGRESSIVE");
+        config.addBuildSettings("GCC_WARN_UNUSED_FUNCTION", "YES");
+        config.addBuildSettings("GCC_WARN_UNUSED_VARIABLE", "YES");
+        config.addBuildSettings("MACOSX_DEPLOYMENT_TARGET", "10.11");
+        config.addBuildSettings("MTL_ENABLE_DEBUG_INFO", "YES");
+        config.addBuildSettings("ONLY_ACTIVE_ARCH", "YES");
+        config.addBuildSettings("SDKROOT", "macosx");
+        buildConfigurations.push_back(std::move(config));
+    }
+    {
+        XCBuildConfiguration config;
+        config.uuid = "A932DE8E1BFCD3CC0006E050";
+        config.name = "Release";
+        config.addBuildSettings("ALWAYS_SEARCH_USER_PATHS", "NO");
+        config.addBuildSettings("CLANG_CXX_LANGUAGE_STANDARD", "\"gnu++0x\"");
+        config.addBuildSettings("CLANG_CXX_LIBRARY", "\"libc++\"");
+        config.addBuildSettings("CLANG_ENABLE_MODULES", "YES");
+        config.addBuildSettings("CLANG_ENABLE_OBJC_ARC", "YES");
+        config.addBuildSettings("CLANG_WARN_BOOL_CONVERSION", "YES");
+        config.addBuildSettings("CLANG_WARN_CONSTANT_CONVERSION", "YES");
+        config.addBuildSettings("CLANG_WARN_DIRECT_OBJC_ISA_USAGE", "YES_ERROR");
+        config.addBuildSettings("CLANG_WARN_EMPTY_BODY", "YES");
+        config.addBuildSettings("CLANG_WARN_ENUM_CONVERSION", "YES");
+        config.addBuildSettings("CLANG_WARN_INT_CONVERSION", "YES");
+        config.addBuildSettings("CLANG_WARN_OBJC_ROOT_CLASS", "YES_ERROR");
+        config.addBuildSettings("CLANG_WARN_UNREACHABLE_CODE", "YES");
+        config.addBuildSettings("CLANG_WARN__DUPLICATE_METHOD_MATCH", "YES");
+        config.addBuildSettings("CODE_SIGN_IDENTITY", "\"-\"");
+        config.addBuildSettings("COPY_PHASE_STRIP", "NO");
+        config.addBuildSettings("DEBUG_INFORMATION_FORMAT", "\"dwarf-with-dsym\"");
+        config.addBuildSettings("ENABLE_NS_ASSERTIONS", "NO");
+        config.addBuildSettings("ENABLE_STRICT_OBJC_MSGSEND", "YES");
+        config.addBuildSettings("GCC_C_LANGUAGE_STANDARD", "gnu99");
+        config.addBuildSettings("GCC_NO_COMMON_BLOCKS", "YES");
+        config.addBuildSettings("GCC_WARN_64_TO_32_BIT_CONVERSION", "YES");
+        config.addBuildSettings("GCC_WARN_ABOUT_RETURN_TYPE", "YES_ERROR");
+        config.addBuildSettings("GCC_WARN_UNDECLARED_SELECTOR", "YES");
+        config.addBuildSettings("GCC_WARN_UNINITIALIZED_AUTOS", "YES_AGGRESSIVE");
+        config.addBuildSettings("GCC_WARN_UNUSED_FUNCTION", "YES");
+        config.addBuildSettings("GCC_WARN_UNUSED_VARIABLE", "YES");
+        config.addBuildSettings("MACOSX_DEPLOYMENT_TARGET", "10.11");
+        config.addBuildSettings("MTL_ENABLE_DEBUG_INFO", "NO");
+        config.addBuildSettings("SDKROOT", "macosx");
+        buildConfigurations.push_back(std::move(config));
+    }
+    {
+        XCBuildConfiguration config;
+        config.uuid = "A932DE901BFCD3CC0006E050";
+        config.name = "Debug";
+        config.addBuildSettings("PRODUCT_NAME", "\"$(TARGET_NAME)\"");
+        buildConfigurations.push_back(std::move(config));
+    }
+    {
+        XCBuildConfiguration config;
+        config.uuid = "A932DE911BFCD3CC0006E050";
+        config.name = "Release";
+        config.addBuildSettings("PRODUCT_NAME", "\"$(TARGET_NAME)\"");
+        buildConfigurations.push_back(std::move(config));
+    }
+
 #endif // ayafuya rocket~~~~~~~
 
     printer.beginSection("PBXBuildFile");
@@ -478,118 +617,17 @@ void printObjects(XcodePrinter & printer)
     printer.endSection();
 
     printer.beginSection("XCBuildConfiguration");
-        printer.beginKeyValue("A932DE8D1BFCD3CC0006E050 /* Debug */");
+    for (auto & config : buildConfigurations) {
+        printer.printKeyValue(config.uuid + " " + encodeComment(config.name), [&] {
             printer.beginObject();
-                printer.printKeyValue("isa", "XCBuildConfiguration");
-                printer.beginKeyValue("buildSettings");
-                    printer.beginObject();
-                    printer.printKeyValue("ALWAYS_SEARCH_USER_PATHS", "NO");
-                    printer.printKeyValue("CLANG_CXX_LANGUAGE_STANDARD", "\"gnu++0x\"");
-                    printer.printKeyValue("CLANG_CXX_LIBRARY", "\"libc++\"");
-                    printer.printKeyValue("CLANG_ENABLE_MODULES", "YES");
-                    printer.printKeyValue("CLANG_ENABLE_OBJC_ARC", "YES");
-                    printer.printKeyValue("CLANG_WARN_BOOL_CONVERSION", "YES");
-                    printer.printKeyValue("CLANG_WARN_CONSTANT_CONVERSION", "YES");
-                    printer.printKeyValue("CLANG_WARN_DIRECT_OBJC_ISA_USAGE", "YES_ERROR");
-                    printer.printKeyValue("CLANG_WARN_EMPTY_BODY", "YES");
-                    printer.printKeyValue("CLANG_WARN_ENUM_CONVERSION", "YES");
-                    printer.printKeyValue("CLANG_WARN_INT_CONVERSION", "YES");
-                    printer.printKeyValue("CLANG_WARN_OBJC_ROOT_CLASS", "YES_ERROR");
-                    printer.printKeyValue("CLANG_WARN_UNREACHABLE_CODE", "YES");
-                    printer.printKeyValue("CLANG_WARN__DUPLICATE_METHOD_MATCH", "YES");
-                    printer.printKeyValue("CODE_SIGN_IDENTITY", "\"-\"");
-                    printer.printKeyValue("COPY_PHASE_STRIP", "NO");
-                    printer.printKeyValue("DEBUG_INFORMATION_FORMAT", "dwarf");
-                    printer.printKeyValue("ENABLE_STRICT_OBJC_MSGSEND", "YES");
-                    printer.printKeyValue("ENABLE_TESTABILITY", "YES");
-                    printer.printKeyValue("GCC_C_LANGUAGE_STANDARD", "gnu99");
-                    printer.printKeyValue("GCC_DYNAMIC_NO_PIC", "NO");
-                    printer.printKeyValue("GCC_NO_COMMON_BLOCKS", "YES");
-                    printer.printKeyValue("GCC_OPTIMIZATION_LEVEL", "0");
-                    printer.printKeyValue("GCC_PREPROCESSOR_DEFINITIONS", std::vector<std::string>{
-                        "\"DEBUG=1\"",
-                        "\"$(inherited)\"",
-                    });
-                    printer.printKeyValue("GCC_WARN_64_TO_32_BIT_CONVERSION", "YES");
-                    printer.printKeyValue("GCC_WARN_ABOUT_RETURN_TYPE", "YES_ERROR");
-                    printer.printKeyValue("GCC_WARN_UNDECLARED_SELECTOR", "YES");
-                    printer.printKeyValue("GCC_WARN_UNINITIALIZED_AUTOS", "YES_AGGRESSIVE");
-                    printer.printKeyValue("GCC_WARN_UNUSED_FUNCTION", "YES");
-                    printer.printKeyValue("GCC_WARN_UNUSED_VARIABLE", "YES");
-                    printer.printKeyValue("MACOSX_DEPLOYMENT_TARGET", "10.11");
-                    printer.printKeyValue("MTL_ENABLE_DEBUG_INFO", "YES");
-                    printer.printKeyValue("ONLY_ACTIVE_ARCH", "YES");
-                    printer.printKeyValue("SDKROOT", "macosx");
-                    printer.endObject();
-                printer.endKeyValue();
-                printer.printKeyValue("name", "Debug");
+                printer.printKeyValue("isa", config.isa());
+                printer.printKeyValue("buildSettings", [&] {
+                    printObject(printer, config.buildSettings);
+                });
+                printer.printKeyValue("name", config.name);
             printer.endObject();
-        printer.endKeyValue();
-
-        printer.beginKeyValue("A932DE8E1BFCD3CC0006E050 /* Release */");
-            printer.beginObject();
-                printer.printKeyValue("isa", "XCBuildConfiguration");
-                printer.beginKeyValue("buildSettings");
-                    printer.beginObject();
-                    printer.printKeyValue("ALWAYS_SEARCH_USER_PATHS", "NO");
-                    printer.printKeyValue("CLANG_CXX_LANGUAGE_STANDARD", "\"gnu++0x\"");
-                    printer.printKeyValue("CLANG_CXX_LIBRARY", "\"libc++\"");
-                    printer.printKeyValue("CLANG_ENABLE_MODULES", "YES");
-                    printer.printKeyValue("CLANG_ENABLE_OBJC_ARC", "YES");
-                    printer.printKeyValue("CLANG_WARN_BOOL_CONVERSION", "YES");
-                    printer.printKeyValue("CLANG_WARN_CONSTANT_CONVERSION", "YES");
-                    printer.printKeyValue("CLANG_WARN_DIRECT_OBJC_ISA_USAGE", "YES_ERROR");
-                    printer.printKeyValue("CLANG_WARN_EMPTY_BODY", "YES");
-                    printer.printKeyValue("CLANG_WARN_ENUM_CONVERSION", "YES");
-                    printer.printKeyValue("CLANG_WARN_INT_CONVERSION", "YES");
-                    printer.printKeyValue("CLANG_WARN_OBJC_ROOT_CLASS", "YES_ERROR");
-                    printer.printKeyValue("CLANG_WARN_UNREACHABLE_CODE", "YES");
-                    printer.printKeyValue("CLANG_WARN__DUPLICATE_METHOD_MATCH", "YES");
-                    printer.printKeyValue("CODE_SIGN_IDENTITY", "\"-\"");
-                    printer.printKeyValue("COPY_PHASE_STRIP", "NO");
-                    printer.printKeyValue("DEBUG_INFORMATION_FORMAT", "\"dwarf-with-dsym\"");
-                    printer.printKeyValue("ENABLE_NS_ASSERTIONS", "NO");
-                    printer.printKeyValue("ENABLE_STRICT_OBJC_MSGSEND", "YES");
-                    printer.printKeyValue("GCC_C_LANGUAGE_STANDARD", "gnu99");
-                    printer.printKeyValue("GCC_NO_COMMON_BLOCKS", "YES");
-                    printer.printKeyValue("GCC_WARN_64_TO_32_BIT_CONVERSION", "YES");
-                    printer.printKeyValue("GCC_WARN_ABOUT_RETURN_TYPE", "YES_ERROR");
-                    printer.printKeyValue("GCC_WARN_UNDECLARED_SELECTOR", "YES");
-                    printer.printKeyValue("GCC_WARN_UNINITIALIZED_AUTOS", "YES_AGGRESSIVE");
-                    printer.printKeyValue("GCC_WARN_UNUSED_FUNCTION", "YES");
-                    printer.printKeyValue("GCC_WARN_UNUSED_VARIABLE", "YES");
-                    printer.printKeyValue("MACOSX_DEPLOYMENT_TARGET", "10.11");
-                    printer.printKeyValue("MTL_ENABLE_DEBUG_INFO", "NO");
-                    printer.printKeyValue("SDKROOT", "macosx");
-                    printer.endObject();
-                printer.endKeyValue();
-                printer.printKeyValue("name", "Release");
-            printer.endObject();
-        printer.endKeyValue();
-
-        printer.beginKeyValue("A932DE901BFCD3CC0006E050 /* Debug */");
-            printer.beginObject();
-                printer.printKeyValue("isa", "XCBuildConfiguration");
-                printer.beginKeyValue("buildSettings");
-                    printer.beginObject();
-                    printer.printKeyValue("PRODUCT_NAME", "\"$(TARGET_NAME)\"");
-                    printer.endObject();
-                printer.endKeyValue();
-                printer.printKeyValue("name", "Debug");
-            printer.endObject();
-        printer.endKeyValue();
-
-        printer.beginKeyValue("A932DE911BFCD3CC0006E050 /* Release */");
-            printer.beginObject();
-                printer.printKeyValue("isa", "XCBuildConfiguration");
-                printer.beginKeyValue("buildSettings");
-                    printer.beginObject();
-                    printer.printKeyValue("PRODUCT_NAME", "\"$(TARGET_NAME)\"");
-                    printer.endObject();
-                printer.endKeyValue();
-                printer.printKeyValue("name", "Release");
-            printer.endObject();
-        printer.endKeyValue();
+        });
+    }
     printer.endSection();
 
     printer.beginSection("XCConfigurationList");
