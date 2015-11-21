@@ -3,11 +3,14 @@
 #include "ProjectTemplate.h"
 #include "FileSystem.h"
 #include "StringHelper.h"
+#include "../somerachan/src/optional.h"
 #include <fstream>
 #include <utility>
 #include <random>
 #include <ctime>
 #include <sstream>
+#include <vector>
+#include <cassert>
 
 namespace somera {
 namespace {
@@ -46,265 +49,599 @@ std::string generateXCWorkSpaceData(const std::string& xcodeprojName)
     return stream.str();
 }
 
+struct PBXBuildFile;
+struct PBXCopyFilesBuildPhase;
+struct PBXFileReference;
+struct PBXFrameworksBuildPhase;
+struct PBXGroup;
+struct PBXNativeTarget;
+struct PBXProject;
+struct PBXSourcesBuildPhase;
+struct XCConfigurationList;
+
+std::string encodeComment(const std::string& comment)
+{
+    return "/* " + comment + " */";
+}
+
+struct PBXBuildFile final {
+    std::string uuid;
+    std::shared_ptr<PBXFileReference> fileRef;
+
+    std::string isa() const noexcept { return "PBXBuildFile"; }
+};
+
+struct PBXCopyFilesBuildPhase final {
+    std::string isa() const noexcept { return "PBXCopyFilesBuildPhase"; }
+};
+
+struct PBXFileReference final {
+    std::string uuid;
+    Optional<std::string> explicitFileType;
+    Optional<std::string> includeInIndex;
+    Optional<std::string> lastKnownFileType;
+    std::string path;
+    std::string sourceTree;
+
+    std::string isa() const noexcept { return "PBXFileReference"; }
+};
+
+struct PBXFrameworksBuildPhase final {
+    std::string isa() const noexcept { return "PBXFrameworksBuildPhase"; }
+};
+
+struct PBXGroup final {
+    std::string uuid;
+
+    // TODO: replace with std::vector<any<std::shared_ptr<PBXFileReference>, std::shared_ptr<PBXGroup>>>
+    std::vector<std::shared_ptr<PBXFileReference>> children;
+
+    Optional<std::string> name;
+    Optional<std::string> path;
+    std::string sourceTree;
+
+    std::string isa() const noexcept { return "PBXGroup"; }
+};
+
+struct PBXNativeTarget final {
+    std::string isa() const noexcept { return "PBXNativeTarget"; }
+};
+
+struct PBXProject final {
+    std::string isa() const noexcept { return "PBXProject"; }
+};
+
+struct PBXSourcesBuildPhase final {
+    std::string uuid;
+    std::string isa() const noexcept { return "PBXSourcesBuildPhase"; }
+    std::string buildActionMask;
+    std::string comments;
+    std::vector<std::shared_ptr<PBXBuildFile>> files;
+    std::string runOnlyForDeploymentPostprocessing;
+
+    std::vector<std::string> getFileListString() const
+    {
+        std::vector<std::string> result;
+        for (auto & buildFile : files) {
+            result.push_back(buildFile->uuid + " " + encodeComment(buildFile->fileRef->path + " in " + comments));
+        }
+        return std::move(result);
+    }
+};
+
+struct XCConfigurationList final {
+    std::string isa() const noexcept { return "XCConfigurationList"; }
+};
+
+struct XcodePrinterSettings {
+    bool isSingleLine = false;
+};
+
+class XcodePrinter {
+    std::stringstream & stream;
+    int tabs;
+    std::string section;
+    std::vector<XcodePrinterSettings> settingsStack;
+
+public:
+    explicit XcodePrinter(std::stringstream & streamIn)
+        : stream(streamIn)
+        , tabs(0)
+    {
+        XcodePrinterSettings settings;
+        settings.isSingleLine = false;
+        settingsStack.push_back(std::move(settings));
+    }
+
+    std::string getIndent() const noexcept
+    {
+        std::string spaces;
+        for (int i = 0; i < tabs; ++i) {
+            spaces += "\t";
+        }
+        return std::move(spaces);
+    }
+
+    void beginKeyValue(const std::string& key)
+    {
+        if (!isSingleLine()) {
+            stream << getIndent();
+        }
+        stream << key << " = ";
+    }
+
+    void endKeyValue()
+    {
+        stream << ";";
+        if (!isSingleLine()) {
+            stream << "\n";
+        } else {
+            stream << " ";
+        }
+    }
+
+    void printKeyValue(const std::string& key, const std::string& value)
+    {
+        beginKeyValue(key);
+        stream << value;
+        endKeyValue();
+    }
+
+    void printKeyValue(const std::string& key, const std::vector<std::string>& array)
+    {
+        beginKeyValue(key);
+        stream << "(";
+        if (!isSingleLine()) {
+            stream << "\n";
+        }
+        ++tabs;
+        for (auto & value : array) {
+            stream << getIndent() << value << ",";
+            if (!isSingleLine()) {
+                stream << "\n";
+            } else {
+                stream << " ";
+            }
+        }
+        --tabs;
+        stream << getIndent() << ")";
+        endKeyValue();
+    }
+
+    void beginObject(bool singleLine = false)
+    {
+        settingsStack.push_back(XcodePrinterSettings{singleLine});
+        stream << "{";
+        if (!isSingleLine()) {
+            stream << "\n";
+            ++tabs;
+        }
+    }
+
+    void endObject()
+    {
+        if (!isSingleLine()) {
+            --tabs;
+            stream << getIndent();
+        }
+        stream << "}";
+        settingsStack.pop_back();
+    }
+
+    void setTabs(int tabsIn)
+    {
+        this->tabs = tabsIn;
+    }
+
+    bool isSingleLine() const
+    {
+        assert(!settingsStack.empty());
+        return settingsStack.back().isSingleLine;
+    }
+
+    void beginSection(const std::string& sectionIn)
+    {
+        settingsStack.push_back(XcodePrinterSettings{false});
+        this->section = sectionIn;
+        stream << "\n";
+        stream << StringHelper::format("/* Begin %s section */\n",
+            section.c_str());
+    }
+
+    void endSection()
+    {
+        stream << StringHelper::format("/* End %s section */\n",
+            section.c_str());
+        settingsStack.pop_back();
+    }
+};
+
+template <typename Container, typename Func>
+auto findIf(Container & c, Func f)
+{
+    auto iter = std::find_if(std::begin(c), std::end(c), f);
+    assert(iter != std::end(c));
+    return *iter;
+}
+
+template <typename Container>
+auto findByPath(Container & c, const std::string& path)
+{
+    return findIf(c, [&](const typename Container::value_type& v) {
+        return v->path == path;
+    });
+}
+
+
+void printObjects(XcodePrinter & printer)
+{
+    constexpr bool isSingleLine = true;
+
+#if 1 // ayafuya rocket~~~~~~~
+    std::vector<std::shared_ptr<PBXFileReference>> pbxFileReferenceList;
+    {
+        auto f = std::make_shared<PBXFileReference>();
+        f->uuid = "A932DE881BFCD3CC0006E050";
+        f->explicitFileType = "\"compiled.mach-o.executable\"";
+        f->includeInIndex = "0";
+        f->path = "MyHidamari";
+        f->sourceTree = "BUILT_PRODUCTS_DIR";
+        pbxFileReferenceList.push_back(std::move(f));
+    }
+    {
+        auto f = std::make_shared<PBXFileReference>();
+        f->uuid = "A932DE8B1BFCD3CC0006E050";
+        f->lastKnownFileType = "sourcecode.cpp.cpp";
+        f->path = "main.cpp";
+        f->sourceTree = "\"<group>\"";
+        pbxFileReferenceList.push_back(std::move(f));
+    }
+
+    std::vector<std::shared_ptr<PBXSourcesBuildPhase>> pbxSourcesBuildPhaseList;
+    {
+        auto phase = std::make_shared<PBXSourcesBuildPhase>();
+        phase->uuid = "A932DE841BFCD3CC0006E050";
+        phase->buildActionMask = "2147483647";
+        phase->runOnlyForDeploymentPostprocessing = "0";
+        phase->comments = "Sources";
+        {
+            auto file = std::make_shared<PBXBuildFile>();
+            file->uuid = "A932DE8C1BFCD3CC0006E050";
+            file->fileRef = findByPath(pbxFileReferenceList, "main.cpp");
+            phase->files.push_back(std::move(file));
+        }
+        pbxSourcesBuildPhaseList.push_back(std::move(phase));
+    }
+#endif // ayafuya rocket~~~~~~~
+
+    printer.beginSection("PBXBuildFile");
+    for (auto & buildPhase : pbxSourcesBuildPhaseList) {
+        for (auto & f : buildPhase->files) {
+            auto & buildFile = *f;
+            printer.beginKeyValue(buildFile.uuid + " " + encodeComment(buildFile.fileRef->path + " in " + buildPhase->comments));
+                printer.beginObject(isSingleLine);
+                printer.printKeyValue("isa", buildFile.isa());
+                printer.printKeyValue("fileRef", buildFile.fileRef->uuid + " " + encodeComment(buildFile.fileRef->path));
+                printer.endObject();
+            printer.endKeyValue();
+        }
+    }
+    printer.endSection();
+
+    printer.beginSection("PBXCopyFilesBuildPhase");
+        printer.beginKeyValue("A932DE861BFCD3CC0006E050 /* CopyFiles */");
+        printer.beginObject();
+        printer.printKeyValue("isa", "PBXCopyFilesBuildPhase");
+        printer.printKeyValue("buildActionMask", "2147483647");
+        printer.printKeyValue("dstPath", "/usr/share/man/man1/");
+        printer.printKeyValue("dstSubfolderSpec", "0");
+        printer.printKeyValue("files", std::vector<std::string>{});
+        printer.printKeyValue("runOnlyForDeploymentPostprocessing", "1");
+        printer.endObject();
+        printer.endKeyValue();
+    printer.endSection();
+
+    printer.beginSection("PBXFileReference");
+    for (auto & f : pbxFileReferenceList) {
+        auto & fileRef = *f;
+        printer.beginKeyValue(fileRef.uuid + " " + encodeComment(fileRef.path));
+            printer.beginObject(isSingleLine);
+                printer.printKeyValue("isa", fileRef.isa());
+                if (fileRef.explicitFileType) {
+                    printer.printKeyValue("explicitFileType", *fileRef.explicitFileType);
+                }
+                if (fileRef.includeInIndex) {
+                    printer.printKeyValue("includeInIndex", *fileRef.includeInIndex);
+                }
+                if (fileRef.lastKnownFileType) {
+                    printer.printKeyValue("lastKnownFileType", *fileRef.lastKnownFileType);
+                }
+                printer.printKeyValue("path", fileRef.path);
+                printer.printKeyValue("sourceTree", fileRef.sourceTree);
+            printer.endObject();
+        printer.endKeyValue();
+    }
+    printer.endSection();
+
+    printer.beginSection("PBXFrameworksBuildPhase");
+        printer.beginKeyValue("A932DE851BFCD3CC0006E050 /* Frameworks */");
+            printer.beginObject();
+                printer.printKeyValue("isa", "PBXFrameworksBuildPhase");
+                printer.printKeyValue("buildActionMask", "2147483647");
+                printer.printKeyValue("files", std::vector<std::string>{});
+                printer.printKeyValue("runOnlyForDeploymentPostprocessing", "0");
+            printer.endObject();
+        printer.endKeyValue();
+    printer.endSection();
+
+    printer.beginSection("PBXGroup");
+        printer.beginKeyValue("A932DE7F1BFCD3CC0006E050");
+            printer.beginObject();
+                printer.printKeyValue("isa", "PBXGroup");
+                printer.printKeyValue("children", std::vector<std::string>{
+                    "A932DE8A1BFCD3CC0006E050 /* MyHidamari */",
+                    "A932DE891BFCD3CC0006E050 /* Products */",
+                });
+                printer.printKeyValue("sourceTree", "\"<group>\"");
+            printer.endObject();
+        printer.endKeyValue();
+
+        printer.beginKeyValue("A932DE891BFCD3CC0006E050 /* Products */");
+            printer.beginObject();
+                printer.printKeyValue("isa", "PBXGroup");
+                printer.printKeyValue("children", std::vector<std::string>{
+                    "A932DE881BFCD3CC0006E050 /* MyHidamari */",
+                });
+                printer.printKeyValue("name", "Products");
+                printer.printKeyValue("sourceTree", "\"<group>\"");
+            printer.endObject();
+        printer.endKeyValue();
+
+        printer.beginKeyValue("A932DE8A1BFCD3CC0006E050 /* MyHidamari */");
+            printer.beginObject();
+                printer.printKeyValue("isa", "PBXGroup");
+                printer.printKeyValue("children", std::vector<std::string>{
+                    "A932DE8B1BFCD3CC0006E050 /* main.cpp */",
+                });
+                printer.printKeyValue("path", "MyHidamari");
+                printer.printKeyValue("sourceTree", "\"<group>\"");
+            printer.endObject();
+        printer.endKeyValue();
+    printer.endSection();
+
+    printer.beginSection("PBXNativeTarget");
+        printer.beginKeyValue("A932DE871BFCD3CC0006E050 /* MyHidamari */");
+            printer.beginObject();
+                printer.printKeyValue("isa", "PBXNativeTarget");
+                printer.printKeyValue("buildConfigurationList", "A932DE8F1BFCD3CC0006E050 /* Build configuration list for PBXNativeTarget \"MyHidamari\" */");
+                printer.printKeyValue("buildPhases", std::vector<std::string>{
+                    "A932DE841BFCD3CC0006E050 /* Sources */",
+                    "A932DE851BFCD3CC0006E050 /* Frameworks */",
+                    "A932DE861BFCD3CC0006E050 /* CopyFiles */",
+                });
+                printer.printKeyValue("buildRules", std::vector<std::string>{});
+                printer.printKeyValue("dependencies", std::vector<std::string>{});
+                printer.printKeyValue("name", "MyHidamari");
+                printer.printKeyValue("productName", "MyHidamari");
+                printer.printKeyValue("productReference", "A932DE881BFCD3CC0006E050 /* MyHidamari */");
+                printer.printKeyValue("productType", "\"com.apple.product-type.tool\"");
+            printer.endObject();
+        printer.endKeyValue();
+    printer.endSection();
+
+    printer.beginSection("PBXProject");
+        printer.beginKeyValue("A932DE801BFCD3CC0006E050 /* Project object */");
+            printer.beginObject();
+                printer.printKeyValue("isa", "PBXProject");
+                printer.beginKeyValue("attributes");
+                    printer.beginObject();
+                        printer.printKeyValue("LastUpgradeCheck", "0710");
+                        printer.printKeyValue("ORGANIZATIONNAME", "mogemimi");
+                        printer.beginKeyValue("TargetAttributes");
+                            printer.beginObject();
+                                printer.beginKeyValue("A932DE871BFCD3CC0006E050");
+                                    printer.beginObject();
+                                        printer.printKeyValue("CreatedOnToolsVersion", "7.1.1");
+                                    printer.endObject();
+                                printer.endKeyValue();
+                            printer.endObject();
+                        printer.endKeyValue();
+                    printer.endObject();
+                printer.endKeyValue();
+                printer.printKeyValue("buildConfigurationList", "A932DE831BFCD3CC0006E050 /* Build configuration list for PBXProject \"MyHidamari\" */");
+                printer.printKeyValue("compatibilityVersion", "\"Xcode 3.2\"");
+                printer.printKeyValue("developmentRegion", "English");
+                printer.printKeyValue("hasScannedForEncodings", "0");
+                printer.printKeyValue("knownRegions", std::vector<std::string>{"en"});
+                printer.printKeyValue("mainGroup", "A932DE7F1BFCD3CC0006E050");
+                printer.printKeyValue("productRefGroup", "A932DE891BFCD3CC0006E050 /* Products */");
+                printer.printKeyValue("projectDirPath", "\"\"");
+                printer.printKeyValue("projectRoot", "\"\"");
+                printer.printKeyValue("targets", std::vector<std::string>{
+                    "A932DE871BFCD3CC0006E050 /* MyHidamari */",
+                });
+            printer.endObject();
+        printer.endKeyValue();
+    printer.endSection();
+
+    printer.beginSection("PBXSourcesBuildPhase");
+    for (auto & buildPhase : pbxSourcesBuildPhaseList) {
+        printer.beginKeyValue(buildPhase->uuid + " " + encodeComment(buildPhase->comments));
+            printer.beginObject();
+                printer.printKeyValue("isa", buildPhase->isa());
+                printer.printKeyValue("buildActionMask", buildPhase->buildActionMask);
+                printer.printKeyValue("files", buildPhase->getFileListString());
+                printer.printKeyValue("runOnlyForDeploymentPostprocessing", buildPhase->runOnlyForDeploymentPostprocessing);
+            printer.endObject();
+        printer.endKeyValue();
+    }
+    printer.endSection();
+
+    printer.beginSection("XCBuildConfiguration");
+        printer.beginKeyValue("A932DE8D1BFCD3CC0006E050 /* Debug */");
+            printer.beginObject();
+                printer.printKeyValue("isa", "XCBuildConfiguration");
+                printer.beginKeyValue("buildSettings");
+                    printer.beginObject();
+                    printer.printKeyValue("ALWAYS_SEARCH_USER_PATHS", "NO");
+                    printer.printKeyValue("CLANG_CXX_LANGUAGE_STANDARD", "\"gnu++0x\"");
+                    printer.printKeyValue("CLANG_CXX_LIBRARY", "\"libc++\"");
+                    printer.printKeyValue("CLANG_ENABLE_MODULES", "YES");
+                    printer.printKeyValue("CLANG_ENABLE_OBJC_ARC", "YES");
+                    printer.printKeyValue("CLANG_WARN_BOOL_CONVERSION", "YES");
+                    printer.printKeyValue("CLANG_WARN_CONSTANT_CONVERSION", "YES");
+                    printer.printKeyValue("CLANG_WARN_DIRECT_OBJC_ISA_USAGE", "YES_ERROR");
+                    printer.printKeyValue("CLANG_WARN_EMPTY_BODY", "YES");
+                    printer.printKeyValue("CLANG_WARN_ENUM_CONVERSION", "YES");
+                    printer.printKeyValue("CLANG_WARN_INT_CONVERSION", "YES");
+                    printer.printKeyValue("CLANG_WARN_OBJC_ROOT_CLASS", "YES_ERROR");
+                    printer.printKeyValue("CLANG_WARN_UNREACHABLE_CODE", "YES");
+                    printer.printKeyValue("CLANG_WARN__DUPLICATE_METHOD_MATCH", "YES");
+                    printer.printKeyValue("CODE_SIGN_IDENTITY", "\"-\"");
+                    printer.printKeyValue("COPY_PHASE_STRIP", "NO");
+                    printer.printKeyValue("DEBUG_INFORMATION_FORMAT", "dwarf");
+                    printer.printKeyValue("ENABLE_STRICT_OBJC_MSGSEND", "YES");
+                    printer.printKeyValue("ENABLE_TESTABILITY", "YES");
+                    printer.printKeyValue("GCC_C_LANGUAGE_STANDARD", "gnu99");
+                    printer.printKeyValue("GCC_DYNAMIC_NO_PIC", "NO");
+                    printer.printKeyValue("GCC_NO_COMMON_BLOCKS", "YES");
+                    printer.printKeyValue("GCC_OPTIMIZATION_LEVEL", "0");
+                    printer.printKeyValue("GCC_PREPROCESSOR_DEFINITIONS", std::vector<std::string>{
+                        "\"DEBUG=1\"",
+                        "\"$(inherited)\"",
+                    });
+                    printer.printKeyValue("GCC_WARN_64_TO_32_BIT_CONVERSION", "YES");
+                    printer.printKeyValue("GCC_WARN_ABOUT_RETURN_TYPE", "YES_ERROR");
+                    printer.printKeyValue("GCC_WARN_UNDECLARED_SELECTOR", "YES");
+                    printer.printKeyValue("GCC_WARN_UNINITIALIZED_AUTOS", "YES_AGGRESSIVE");
+                    printer.printKeyValue("GCC_WARN_UNUSED_FUNCTION", "YES");
+                    printer.printKeyValue("GCC_WARN_UNUSED_VARIABLE", "YES");
+                    printer.printKeyValue("MACOSX_DEPLOYMENT_TARGET", "10.11");
+                    printer.printKeyValue("MTL_ENABLE_DEBUG_INFO", "YES");
+                    printer.printKeyValue("ONLY_ACTIVE_ARCH", "YES");
+                    printer.printKeyValue("SDKROOT", "macosx");
+                    printer.endObject();
+                printer.endKeyValue();
+                printer.printKeyValue("name", "Debug");
+            printer.endObject();
+        printer.endKeyValue();
+
+        printer.beginKeyValue("A932DE8E1BFCD3CC0006E050 /* Release */");
+            printer.beginObject();
+                printer.printKeyValue("isa", "XCBuildConfiguration");
+                printer.beginKeyValue("buildSettings");
+                    printer.beginObject();
+                    printer.printKeyValue("ALWAYS_SEARCH_USER_PATHS", "NO");
+                    printer.printKeyValue("CLANG_CXX_LANGUAGE_STANDARD", "\"gnu++0x\"");
+                    printer.printKeyValue("CLANG_CXX_LIBRARY", "\"libc++\"");
+                    printer.printKeyValue("CLANG_ENABLE_MODULES", "YES");
+                    printer.printKeyValue("CLANG_ENABLE_OBJC_ARC", "YES");
+                    printer.printKeyValue("CLANG_WARN_BOOL_CONVERSION", "YES");
+                    printer.printKeyValue("CLANG_WARN_CONSTANT_CONVERSION", "YES");
+                    printer.printKeyValue("CLANG_WARN_DIRECT_OBJC_ISA_USAGE", "YES_ERROR");
+                    printer.printKeyValue("CLANG_WARN_EMPTY_BODY", "YES");
+                    printer.printKeyValue("CLANG_WARN_ENUM_CONVERSION", "YES");
+                    printer.printKeyValue("CLANG_WARN_INT_CONVERSION", "YES");
+                    printer.printKeyValue("CLANG_WARN_OBJC_ROOT_CLASS", "YES_ERROR");
+                    printer.printKeyValue("CLANG_WARN_UNREACHABLE_CODE", "YES");
+                    printer.printKeyValue("CLANG_WARN__DUPLICATE_METHOD_MATCH", "YES");
+                    printer.printKeyValue("CODE_SIGN_IDENTITY", "\"-\"");
+                    printer.printKeyValue("COPY_PHASE_STRIP", "NO");
+                    printer.printKeyValue("DEBUG_INFORMATION_FORMAT", "\"dwarf-with-dsym\"");
+                    printer.printKeyValue("ENABLE_NS_ASSERTIONS", "NO");
+                    printer.printKeyValue("ENABLE_STRICT_OBJC_MSGSEND", "YES");
+                    printer.printKeyValue("GCC_C_LANGUAGE_STANDARD", "gnu99");
+                    printer.printKeyValue("GCC_NO_COMMON_BLOCKS", "YES");
+                    printer.printKeyValue("GCC_WARN_64_TO_32_BIT_CONVERSION", "YES");
+                    printer.printKeyValue("GCC_WARN_ABOUT_RETURN_TYPE", "YES_ERROR");
+                    printer.printKeyValue("GCC_WARN_UNDECLARED_SELECTOR", "YES");
+                    printer.printKeyValue("GCC_WARN_UNINITIALIZED_AUTOS", "YES_AGGRESSIVE");
+                    printer.printKeyValue("GCC_WARN_UNUSED_FUNCTION", "YES");
+                    printer.printKeyValue("GCC_WARN_UNUSED_VARIABLE", "YES");
+                    printer.printKeyValue("MACOSX_DEPLOYMENT_TARGET", "10.11");
+                    printer.printKeyValue("MTL_ENABLE_DEBUG_INFO", "NO");
+                    printer.printKeyValue("SDKROOT", "macosx");
+                    printer.endObject();
+                printer.endKeyValue();
+                printer.printKeyValue("name", "Release");
+            printer.endObject();
+        printer.endKeyValue();
+
+        printer.beginKeyValue("A932DE901BFCD3CC0006E050 /* Debug */");
+            printer.beginObject();
+                printer.printKeyValue("isa", "XCBuildConfiguration");
+                printer.beginKeyValue("buildSettings");
+                    printer.beginObject();
+                    printer.printKeyValue("PRODUCT_NAME", "\"$(TARGET_NAME)\"");
+                    printer.endObject();
+                printer.endKeyValue();
+                printer.printKeyValue("name", "Debug");
+            printer.endObject();
+        printer.endKeyValue();
+
+        printer.beginKeyValue("A932DE911BFCD3CC0006E050 /* Release */");
+            printer.beginObject();
+                printer.printKeyValue("isa", "XCBuildConfiguration");
+                printer.beginKeyValue("buildSettings");
+                    printer.beginObject();
+                    printer.printKeyValue("PRODUCT_NAME", "\"$(TARGET_NAME)\"");
+                    printer.endObject();
+                printer.endKeyValue();
+                printer.printKeyValue("name", "Release");
+            printer.endObject();
+        printer.endKeyValue();
+    printer.endSection();
+
+    printer.beginSection("XCConfigurationList");
+        printer.beginKeyValue("A932DE831BFCD3CC0006E050 /* Build configuration list for PBXProject \"MyHidamari\" */");
+            printer.beginObject();
+                printer.printKeyValue("isa", "XCConfigurationList");
+                printer.printKeyValue("buildConfigurations", std::vector<std::string>{
+                    "A932DE8D1BFCD3CC0006E050 /* Debug */",
+                    "A932DE8E1BFCD3CC0006E050 /* Release */",
+                });
+                printer.printKeyValue("defaultConfigurationIsVisible", "0");
+                printer.printKeyValue("defaultConfigurationName", "Release");
+            printer.endObject();
+        printer.endKeyValue();
+
+        printer.beginKeyValue("A932DE8F1BFCD3CC0006E050 /* Build configuration list for PBXNativeTarget \"MyHidamari\" */");
+            printer.beginObject();
+                printer.printKeyValue("isa", "XCConfigurationList");
+                printer.printKeyValue("buildConfigurations", std::vector<std::string>{
+                    "A932DE901BFCD3CC0006E050 /* Debug */",
+                    "A932DE911BFCD3CC0006E050 /* Release */",
+                });
+                printer.printKeyValue("defaultConfigurationIsVisible", "0");
+            printer.endObject();
+        printer.endKeyValue();
+    printer.endSection();
+}
+
 std::string generatePbxproj()
 {
+    using StringHelper::format;
+
     std::stringstream stream;
-    stream <<
-    "// !$*UTF8*$!\n"
-    "{\n"
-    "  archiveVersion = 1;\n"
-    "  classes = {\n"
-    "  };\n"
-    "  objectVersion = 46;\n"
-    "  objects = {\n"
-    "\n";
-    stream <<
-    "/* Begin PBXBuildFile section */\n"
-    "    A932DE8C1BFCD3CC0006E050 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A932DE8B1BFCD3CC0006E050 /* main.cpp */; };\n"
-    "/* End PBXBuildFile section */\n"
-    "\n";
-    stream <<
-    "/* Begin PBXCopyFilesBuildPhase section */\n"
-    "    A932DE861BFCD3CC0006E050 /* CopyFiles */ = {\n"
-    "      isa = PBXCopyFilesBuildPhase;\n"
-    "      buildActionMask = 2147483647;\n"
-    "      dstPath = /usr/share/man/man1/;\n"
-    "      dstSubfolderSpec = 0;\n"
-    "      files = (\n"
-    "      );\n"
-    "      runOnlyForDeploymentPostprocessing = 1;\n"
-    "    };\n"
-    "/* End PBXCopyFilesBuildPhase section */\n"
-    "\n";
-    stream <<
-    "/* Begin PBXFileReference section */\n"
-    "    A932DE881BFCD3CC0006E050 /* MyHidamari */ = {isa = PBXFileReference; explicitFileType = \"compiled.mach-o.executable\"; includeInIndex = 0; path = MyHidamari; sourceTree = BUILT_PRODUCTS_DIR; };\n"
-    "    A932DE8B1BFCD3CC0006E050 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = \"<group>\"; };\n"
-    "/* End PBXFileReference section */\n"
-    "\n";
-    stream <<
-    "/* Begin PBXFrameworksBuildPhase section */\n"
-    "    A932DE851BFCD3CC0006E050 /* Frameworks */ = {\n"
-    "      isa = PBXFrameworksBuildPhase;\n"
-    "      buildActionMask = 2147483647;\n"
-    "      files = (\n"
-    "      );\n"
-    "      runOnlyForDeploymentPostprocessing = 0;\n"
-    "    };\n"
-    "/* End PBXFrameworksBuildPhase section */\n"
-    "\n";
-    stream <<
-    "/* Begin PBXGroup section */\n"
-    "    A932DE7F1BFCD3CC0006E050 = {\n"
-    "      isa = PBXGroup;\n"
-    "      children = (\n"
-    "        A932DE8A1BFCD3CC0006E050 /* MyHidamari */,\n"
-    "        A932DE891BFCD3CC0006E050 /* Products */,\n"
-    "      );\n"
-    "      sourceTree = \"<group>\";\n"
-    "    };\n"
-    "    A932DE891BFCD3CC0006E050 /* Products */ = {\n"
-    "      isa = PBXGroup;\n"
-    "      children = (\n"
-    "        A932DE881BFCD3CC0006E050 /* MyHidamari */,\n"
-    "      );\n"
-    "      name = Products;\n"
-    "      sourceTree = \"<group>\";\n"
-    "    };\n"
-    "    A932DE8A1BFCD3CC0006E050 /* MyHidamari */ = {\n"
-    "      isa = PBXGroup;\n"
-    "      children = (\n"
-    "        A932DE8B1BFCD3CC0006E050 /* main.cpp */,\n"
-    "      );\n"
-    "      path = MyHidamari;\n"
-    "      sourceTree = \"<group>\";\n"
-    "    };\n"
-    "/* End PBXGroup section */\n"
-    "\n";
-    stream <<
-    "/* Begin PBXNativeTarget section */\n"
-    "    A932DE871BFCD3CC0006E050 /* MyHidamari */ = {\n"
-    "      isa = PBXNativeTarget;\n"
-    "      buildConfigurationList = A932DE8F1BFCD3CC0006E050 /* Build configuration list for PBXNativeTarget \"MyHidamari\" */;\n"
-    "      buildPhases = (\n"
-    "        A932DE841BFCD3CC0006E050 /* Sources */,\n"
-    "        A932DE851BFCD3CC0006E050 /* Frameworks */,\n"
-    "        A932DE861BFCD3CC0006E050 /* CopyFiles */,\n"
-    "      );\n"
-    "      buildRules = (\n"
-    "      );\n"
-    "      dependencies = (\n"
-    "      );\n"
-    "      name = MyHidamari;\n"
-    "      productName = MyHidamari;\n"
-    "      productReference = A932DE881BFCD3CC0006E050 /* MyHidamari */;\n"
-    "      productType = \"com.apple.product-type.tool\";\n"
-    "    };\n"
-    "/* End PBXNativeTarget section */\n"
-    "\n";
-    stream <<
-    "/* Begin PBXProject section */\n"
-    "    A932DE801BFCD3CC0006E050 /* Project object */ = {\n"
-    "      isa = PBXProject;\n"
-    "      attributes = {\n"
-    "        LastUpgradeCheck = 0710;\n"
-    "        ORGANIZATIONNAME = mogemimi;\n"
-    "        TargetAttributes = {\n"
-    "          A932DE871BFCD3CC0006E050 = {\n"
-    "            CreatedOnToolsVersion = 7.1.1;\n"
-    "          };\n"
-    "        };\n"
-    "      };\n"
-    "      buildConfigurationList = A932DE831BFCD3CC0006E050 /* Build configuration list for PBXProject \"MyHidamari\" */;\n"
-    "      compatibilityVersion = \"Xcode 3.2\";\n"
-    "      developmentRegion = English;\n"
-    "      hasScannedForEncodings = 0;\n"
-    "      knownRegions = (\n"
-    "        en,\n"
-    "      );\n"
-    "      mainGroup = A932DE7F1BFCD3CC0006E050;\n"
-    "      productRefGroup = A932DE891BFCD3CC0006E050 /* Products */;\n"
-    "      projectDirPath = \"\";\n"
-    "      projectRoot = \"\";\n"
-    "      targets = (\n"
-    "        A932DE871BFCD3CC0006E050 /* MyHidamari */,\n"
-    "      );\n"
-    "    };\n"
-    "/* End PBXProject section */\n"
-    "\n";
-    stream <<
-    "/* Begin PBXSourcesBuildPhase section */\n"
-    "    A932DE841BFCD3CC0006E050 /* Sources */ = {\n"
-    "      isa = PBXSourcesBuildPhase;\n"
-    "      buildActionMask = 2147483647;\n"
-    "      files = (\n"
-    "        A932DE8C1BFCD3CC0006E050 /* main.cpp in Sources */,\n"
-    "      );\n"
-    "      runOnlyForDeploymentPostprocessing = 0;\n"
-    "    };\n"
-    "/* End PBXSourcesBuildPhase section */\n"
-    "\n";
-    stream <<
-    "/* Begin XCBuildConfiguration section */\n"
-    "    A932DE8D1BFCD3CC0006E050 /* Debug */ = {\n"
-    "      isa = XCBuildConfiguration;\n"
-    "      buildSettings = {\n"
-    "        ALWAYS_SEARCH_USER_PATHS = NO;\n"
-    "        CLANG_CXX_LANGUAGE_STANDARD = \"gnu++0x\";\n"
-    "        CLANG_CXX_LIBRARY = \"libc++\";\n"
-    "        CLANG_ENABLE_MODULES = YES;\n"
-    "        CLANG_ENABLE_OBJC_ARC = YES;\n"
-    "        CLANG_WARN_BOOL_CONVERSION = YES;\n"
-    "        CLANG_WARN_CONSTANT_CONVERSION = YES;\n"
-    "        CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;\n"
-    "        CLANG_WARN_EMPTY_BODY = YES;\n"
-    "        CLANG_WARN_ENUM_CONVERSION = YES;\n"
-    "        CLANG_WARN_INT_CONVERSION = YES;\n"
-    "        CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;\n"
-    "        CLANG_WARN_UNREACHABLE_CODE = YES;\n"
-    "        CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;\n"
-    "        CODE_SIGN_IDENTITY = \"-\";\n"
-    "        COPY_PHASE_STRIP = NO;\n"
-    "        DEBUG_INFORMATION_FORMAT = dwarf;\n"
-    "        ENABLE_STRICT_OBJC_MSGSEND = YES;\n"
-    "        ENABLE_TESTABILITY = YES;\n"
-    "        GCC_C_LANGUAGE_STANDARD = gnu99;\n"
-    "        GCC_DYNAMIC_NO_PIC = NO;\n"
-    "        GCC_NO_COMMON_BLOCKS = YES;\n"
-    "        GCC_OPTIMIZATION_LEVEL = 0;\n"
-    "        GCC_PREPROCESSOR_DEFINITIONS = (\n"
-    "          \"DEBUG=1\",\n"
-    "          \"$(inherited)\",\n"
-    "        );\n"
-    "        GCC_WARN_64_TO_32_BIT_CONVERSION = YES;\n"
-    "        GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;\n"
-    "        GCC_WARN_UNDECLARED_SELECTOR = YES;\n"
-    "        GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;\n"
-    "        GCC_WARN_UNUSED_FUNCTION = YES;\n"
-    "        GCC_WARN_UNUSED_VARIABLE = YES;\n"
-    "        MACOSX_DEPLOYMENT_TARGET = 10.11;\n"
-    "        MTL_ENABLE_DEBUG_INFO = YES;\n"
-    "        ONLY_ACTIVE_ARCH = YES;\n"
-    "        SDKROOT = macosx;\n"
-    "      };\n"
-    "      name = Debug;\n"
-    "    };\n"
-    "    A932DE8E1BFCD3CC0006E050 /* Release */ = {\n"
-    "      isa = XCBuildConfiguration;\n"
-    "      buildSettings = {\n"
-    "        ALWAYS_SEARCH_USER_PATHS = NO;\n"
-    "        CLANG_CXX_LANGUAGE_STANDARD = \"gnu++0x\";\n"
-    "        CLANG_CXX_LIBRARY = \"libc++\";\n"
-    "        CLANG_ENABLE_MODULES = YES;\n"
-    "        CLANG_ENABLE_OBJC_ARC = YES;\n"
-    "        CLANG_WARN_BOOL_CONVERSION = YES;\n"
-    "        CLANG_WARN_CONSTANT_CONVERSION = YES;\n"
-    "        CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;\n"
-    "        CLANG_WARN_EMPTY_BODY = YES;\n"
-    "        CLANG_WARN_ENUM_CONVERSION = YES;\n"
-    "        CLANG_WARN_INT_CONVERSION = YES;\n"
-    "        CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;\n"
-    "        CLANG_WARN_UNREACHABLE_CODE = YES;\n"
-    "        CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;\n"
-    "        CODE_SIGN_IDENTITY = \"-\";\n"
-    "        COPY_PHASE_STRIP = NO;\n"
-    "        DEBUG_INFORMATION_FORMAT = \"dwarf-with-dsym\";\n"
-    "        ENABLE_NS_ASSERTIONS = NO;\n"
-    "        ENABLE_STRICT_OBJC_MSGSEND = YES;\n"
-    "        GCC_C_LANGUAGE_STANDARD = gnu99;\n"
-    "        GCC_NO_COMMON_BLOCKS = YES;\n"
-    "        GCC_WARN_64_TO_32_BIT_CONVERSION = YES;\n"
-    "        GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;\n"
-    "        GCC_WARN_UNDECLARED_SELECTOR = YES;\n"
-    "        GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;\n"
-    "        GCC_WARN_UNUSED_FUNCTION = YES;\n"
-    "        GCC_WARN_UNUSED_VARIABLE = YES;\n"
-    "        MACOSX_DEPLOYMENT_TARGET = 10.11;\n"
-    "        MTL_ENABLE_DEBUG_INFO = NO;\n"
-    "        SDKROOT = macosx;\n"
-    "      };\n"
-    "      name = Release;\n"
-    "    };\n"
-    "    A932DE901BFCD3CC0006E050 /* Debug */ = {\n"
-    "      isa = XCBuildConfiguration;\n"
-    "      buildSettings = {\n"
-    "        PRODUCT_NAME = \"$(TARGET_NAME)\";\n"
-    "      };\n"
-    "      name = Debug;\n"
-    "    };\n"
-    "    A932DE911BFCD3CC0006E050 /* Release */ = {\n"
-    "      isa = XCBuildConfiguration;\n"
-    "      buildSettings = {\n"
-    "        PRODUCT_NAME = \"$(TARGET_NAME)\";\n"
-    "      };\n"
-    "      name = Release;\n"
-    "    };\n"
-    "/* End XCBuildConfiguration section */\n"
-    "\n";
-    stream <<
-    "/* Begin XCConfigurationList section */\n"
-    "    A932DE831BFCD3CC0006E050 /* Build configuration list for PBXProject \"MyHidamari\" */ = {\n"
-    "      isa = XCConfigurationList;\n"
-    "      buildConfigurations = (\n"
-    "        A932DE8D1BFCD3CC0006E050 /* Debug */,\n"
-    "        A932DE8E1BFCD3CC0006E050 /* Release */,\n"
-    "      );\n"
-    "      defaultConfigurationIsVisible = 0;\n"
-    "      defaultConfigurationName = Release;\n"
-    "    };\n"
-    "    A932DE8F1BFCD3CC0006E050 /* Build configuration list for PBXNativeTarget \"MyHidamari\" */ = {\n"
-    "      isa = XCConfigurationList;\n"
-    "      buildConfigurations = (\n"
-    "        A932DE901BFCD3CC0006E050 /* Debug */,\n"
-    "        A932DE911BFCD3CC0006E050 /* Release */,\n"
-    "      );\n"
-    "      defaultConfigurationIsVisible = 0;\n"
-    "    };\n"
-    "/* End XCConfigurationList section */\n";
-    stream <<
-    "  };\n"
-    "  rootObject = A932DE801BFCD3CC0006E050 /* Project object */;\n"
-    "}\n";
+    stream << "// !$*UTF8*$!\n";
+
+    XcodePrinter printer(stream);
+    printer.beginObject();
+        printer.printKeyValue("archiveVersion", "1");
+        printer.beginKeyValue("classes");
+            printer.beginObject();
+            printer.endObject();
+        printer.endKeyValue();
+        printer.printKeyValue("objectVersion", "46");
+        printer.beginKeyValue("objects");
+            printer.beginObject();
+            printObjects(printer);
+            printer.endObject();
+        printer.endKeyValue();
+        printer.printKeyValue("rootObject", "A932DE801BFCD3CC0006E050 /* Project object */");
+    printer.endObject();
+
+    stream << "\n";
     return stream.str();
 }
 
