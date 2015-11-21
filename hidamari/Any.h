@@ -42,9 +42,10 @@ public:
 
     template <typename T>
     Any(T && value)
-        : data(std::make_unique<Holder<typename std::remove_reference<T>::type>
+        : data(std::make_unique<Holder<
+                std::remove_const_t<std::remove_reference_t<T>>>
             >(std::forward<T>(value)))
-        , typeIndex(typeid(T))
+        , typeIndex(typeid(std::remove_const_t<std::remove_reference_t<T>>))
     {}
 
     template <typename T>
@@ -60,6 +61,7 @@ public:
         if (!is<T>()) {
             //throw BadAnyCast;
         }
+        assert(is<T>());
         assert(data);
         auto derived = dynamic_cast<Holder<T>*>(data.get());
         assert(derived);
@@ -73,6 +75,7 @@ public:
         if (!is<T>()) {
             //throw BadAnyCast;
         }
+        assert(is<T>());
         assert(data);
         auto derived = dynamic_cast<Holder<T>*>(data.get());
         assert(derived);
