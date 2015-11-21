@@ -16,10 +16,12 @@
         '../somerachan/iutest/include',
       ],
       'sources': [
+        'Any.h',
         'CommandLineParser.cpp',
         'CommandLineParser.h',
         'StringHelper.cpp',
         'StringHelper.h',
+        'tests/Any.cpp',
         'tests/CommandLineParser.cpp',
         'tests/main.cpp',
       ],
