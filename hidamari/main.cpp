@@ -3,6 +3,7 @@
 #include "CommandLineParser.h"
 #include "ProjectTemplate.h"
 #include "StringHelper.h"
+#include "SubprocessHelper.h"
 #include <iostream>
 #include <vector>
 #include <string>
@@ -121,5 +122,8 @@ int main(int argc, char *argv[])
         }
         break;
     }
+
+    options.author = somera::SubprocessHelper::call("git config user.name");
+
     return 0;
 }

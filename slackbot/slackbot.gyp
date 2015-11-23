@@ -29,6 +29,8 @@
         'SlackClient.h',
         'TerminalHelper.cpp',
         'TerminalHelper.h',
+        '../hidamari/SubprocessHelper.cpp',
+        '../hidamari/SubprocessHelper.h',
         '../somerachan/src/optional.h',
       ],
     },

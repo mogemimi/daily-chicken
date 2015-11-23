@@ -764,7 +764,9 @@ std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& op
         project->targets.push_back(findByUuid(xcodeProject->nativeTargets, "A932DE871BFCD3CC0006E050"));
 
         project->addAttribute("LastUpgradeCheck", "0710");
-        project->addAttribute("ORGANIZATIONNAME", "mogemimi");
+        if (!options.author.empty()) {
+            project->addAttribute("ORGANIZATIONNAME", options.author);
+        }
 
         std::vector<XcodeTargetAttribute> targetAttributes;
         {

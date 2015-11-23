@@ -21,6 +21,8 @@
         'CommandLineParser.h',
         'StringHelper.cpp',
         'StringHelper.h',
+        'SubprocessHelper.cpp',
+        'SubprocessHelper.h',
         'tests/Any.cpp',
         'tests/CommandLineParser.cpp',
         'tests/main.cpp',

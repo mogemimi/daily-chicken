@@ -32,6 +32,7 @@ struct CompileOptions {
     std::vector<std::string> includeSearchPaths;
     std::vector<std::string> librarySearchPaths;
     std::vector<std::string> flags;
+    std::string author;
 };
 
 GeneratorError generateXcodeProject(const CompileOptions& options);

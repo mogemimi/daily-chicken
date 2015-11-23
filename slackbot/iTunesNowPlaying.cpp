@@ -1,7 +1,7 @@
 // Copyright (c) 2015 mogemimi. Distributed under the MIT license.
 
 #include "iTunesNowplaying.h"
-#include <cstdio>
+#include "../hidamari/SubprocessHelper.h"
 #include <sstream>
 #include <utility>
 #ifdef __APPLE_CC__
@@ -10,34 +10,14 @@
 
 namespace somera {
 namespace iTunesNowPlaying {
-namespace {
-
-std::string subprocessCall(const std::string& command)
-{
-    constexpr int maxBufferSize = 255;
-    char buffer[maxBufferSize];
-    ::FILE* stream = ::popen(command.c_str(), "r");
-    if (stream == nullptr) {
-        ::pclose(stream);
-        return "";
-    }
-    std::string output;
-    while (::fgets(buffer, maxBufferSize, stream) != nullptr) {
-        output.append(buffer);
-    }
-    ::pclose(stream);
-    return std::move(output);
-}
-
-} // unnamed namespace
 
 somera::Optional<Track> getCurrentTrack()
 {
 #if defined(__APPLE_CC__) \
     && (MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_8)
     // for Mac OS X
-#define SOMERA_APPLESCRIPT_TOSTRING(x) std::string(#x)
-    auto output = subprocessCall("osascript -e" + SOMERA_APPLESCRIPT_TOSTRING(
+#define SOMERA_TOSTRING(x) std::string(#x)
+    auto output = SubprocessHelper::call("osascript -e" + SOMERA_TOSTRING(
         'try' -e
             'tell application "iTunes"' -e
                 'set trackName to name of current track' -e

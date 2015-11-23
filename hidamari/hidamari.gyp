@@ -26,6 +26,8 @@
         'ProjectTemplate.h',
         'StringHelper.cpp',
         'StringHelper.h',
+        'SubprocessHelper.cpp',
+        'SubprocessHelper.h',
         'main.cpp',
       ],
     },
