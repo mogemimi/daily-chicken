@@ -95,7 +95,6 @@ void CommandLineParser::parse(int argc, const char *argv[])
         if (!found) {
             if (StringHelper::startWith(argument, "--")) {
                 errorMessage << "error: unsupported option: '" << argument << "'\n";
-
             } else {
                 errorMessage << "error: unknown argument: '" << argument << "'\n";
             }

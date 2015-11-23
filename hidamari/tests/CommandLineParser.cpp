@@ -1,6 +1,7 @@
 // Copyright (c) 2015 mogemimi. Distributed under the MIT license.
 
 #include "CommandLineParser.h"
+#include "FileSystem.h"
 #include "StringHelper.h"
 #include <gtest/iutest_switch.hpp>
 
@@ -46,4 +47,12 @@ TEST(StringHelper, startWith)
     EXPECT_FALSE(startWith("", "baka"));
     EXPECT_FALSE(startWith("-baka", "baka"));
     EXPECT_FALSE(startWith("baka", "-baka"));
+}
+
+TEST(FileSystem, normalize)
+{
+    const auto normalize = FileSystem::normalize;
+    EXPECT_EQ(FileSystem::getCurrentDirectory(), normalize(""));
+    EXPECT_EQ(FileSystem::getCurrentDirectory(), normalize("."));
+    EXPECT_EQ(FileSystem::getCurrentDirectory(), normalize("./"));
 }

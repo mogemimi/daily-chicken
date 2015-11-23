@@ -19,6 +19,8 @@
         'Any.h',
         'CommandLineParser.cpp',
         'CommandLineParser.h',
+        'FileSystem.cpp',
+        'FileSystem.h',
         'StringHelper.cpp',
         'StringHelper.h',
         'SubprocessHelper.cpp',
