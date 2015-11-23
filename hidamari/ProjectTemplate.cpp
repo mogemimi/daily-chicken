@@ -17,23 +17,23 @@
 namespace somera {
 namespace {
 
-//std::string generateXcodeID()
-//{
-//    std::random_device device;
-//    static uint32_t hash1 = device();
-//    hash1 += 2;
-//
-//    ::time_t timeRaw;
-//    ::time(&timeRaw);
-//    static uint32_t hash2 = static_cast<uint32_t>(timeRaw);
-//    std::uniform_int_distribution<uint8_t> dist(0, 16);
-//    hash2 += dist(device);
-//
-//    static const uint32_t hash3 = device();
-//
-//    std::string id = StringHelper::format("%08X%08X%08X", hash1, hash2, hash3);
-//    return id;
-//}
+std::string generateXcodeID() noexcept
+{
+    std::random_device device;
+    static uint32_t hash1 = device();
+    hash1 += 2;
+
+    ::time_t timeRaw;
+    ::time(&timeRaw);
+    static uint32_t hash2 = static_cast<uint32_t>(timeRaw);
+    std::uniform_int_distribution<uint8_t> dist(0, 16);
+    hash2 += dist(device);
+
+    static const uint32_t hash3 = device();
+
+    std::string id = StringHelper::format("%08X%08X%08X", hash1, hash2, hash3);
+    return id;
+}
 
 std::string generateXCWorkSpaceData(const std::string& xcodeprojName)
 {
@@ -506,9 +506,6 @@ std::string findLastKnownFileType(const std::string& path) noexcept
     if (ext == "m") {
         return "sourcecode.c.objc";
     }
-    if (ext == "m") {
-        return "sourcecode.c.objc";
-    }
     if (ext == "c") {
         return "sourcecode.c";
     }
@@ -522,6 +519,12 @@ std::string findLastKnownFileType(const std::string& path) noexcept
         return "sourcecode.c.h";
     }
     return "sourcecode";
+}
+
+bool isHeaderFile(const std::string& path) noexcept
+{
+    auto ext = std::get<1>(FileSystem::splitExtension(path));
+    return (ext == "h" || ext == "hh" || ext == "hpp" || ext == "hxx");
 }
 
 std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& options)
@@ -538,11 +541,12 @@ std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& op
         f->sourceTree = "BUILT_PRODUCTS_DIR";
         xcodeProject->fileReferences.push_back(std::move(f));
     }
-    {
+
+    for (auto & source : options.sources) {
         auto f = std::make_shared<PBXFileReference>();
-        f->uuid = "A932DE8B1BFCD3CC0006E050";
-        f->lastKnownFileType = findLastKnownFileType("main.cpp");
-        f->path = "main.cpp";
+        f->uuid = generateXcodeID();
+        f->lastKnownFileType = findLastKnownFileType(source);
+        f->path = source;
         f->sourceTree = "\"<group>\"";
         xcodeProject->fileReferences.push_back(std::move(f));
     }
@@ -553,10 +557,13 @@ std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& op
         phase->uuid = "A932DE841BFCD3CC0006E050";
         phase->buildActionMask = "2147483647";
         phase->runOnlyForDeploymentPostprocessing = "0";
-        {
+        for (auto & source : options.sources) {
+            if (isHeaderFile(source)) {
+                continue;
+            }
             auto file = std::make_shared<PBXBuildFile>();
             file->uuid = "A932DE8C1BFCD3CC0006E050";
-            file->fileRef = findByPath(xcodeProject->fileReferences, "main.cpp");
+            file->fileRef = findByPath(xcodeProject->fileReferences, source);
             phase->files.push_back(std::move(file));
         }
         xcodeProject->sourcesBuildPhases.push_back(std::move(phase));
@@ -692,8 +699,10 @@ std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& op
     {
         auto group = std::make_shared<PBXGroup>();
         group->uuid = "A932DE8A1BFCD3CC0006E050";
-        group->children.push_back(findByUuid(xcodeProject->fileReferences, "A932DE8B1BFCD3CC0006E050"));
         group->name = "Source";
+        for (auto & source : options.sources) {
+            group->children.push_back(findByPath(xcodeProject->fileReferences, source));
+        }
         xcodeProject->groups.push_back(std::move(group));
     }
     {
