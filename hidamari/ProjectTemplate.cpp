@@ -105,6 +105,7 @@ struct XcodeProject final : Noncopyable {
     //std::map<std::string, Any> classes;
     //std::map<std::string, std::shared_ptr<XcodeObject>> objects;
     std::shared_ptr<PBXProject> rootObject;
+    std::string name;
 
     std::vector<std::shared_ptr<XCBuildConfiguration>> buildConfigurations;
     std::vector<std::shared_ptr<XCConfigurationList>> configurationLists;
@@ -143,7 +144,12 @@ struct PBXGroup final : public XcodeObject {
 
     Optional<std::string> name;
     Optional<std::string> path;
-    std::string sourceTree;
+    Optional<std::string> sourceTree;
+
+    std::string getSourceTree() const noexcept
+    {
+        return sourceTree ? *sourceTree : "\"<group>\"";
+    }
 
     std::string getUuidWithComment()
     {
@@ -482,7 +488,7 @@ void printObject(XcodePrinter & printer, const std::map<std::string, Any>& objec
     printer.endObject();
 }
 
-std::shared_ptr<XcodeProject> createXcodeProject()
+std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& options)
 {
     auto xcodeProject = std::make_shared<XcodeProject>();
 
@@ -492,14 +498,22 @@ std::shared_ptr<XcodeProject> createXcodeProject()
         f->uuid = "A932DE881BFCD3CC0006E050";
         f->explicitFileType = "\"compiled.mach-o.executable\"";
         f->includeInIndex = "0";
-        f->path = "MyHidamari";
+        f->path = options.outputFileName;
         f->sourceTree = "BUILT_PRODUCTS_DIR";
         xcodeProject->fileReferences.push_back(std::move(f));
     }
     {
         auto f = std::make_shared<PBXFileReference>();
         f->uuid = "A932DE8B1BFCD3CC0006E050";
-        f->lastKnownFileType = "sourcecode.cpp.cpp";
+        f->lastKnownFileType = [](const std::string& path) {
+            auto ext = std::get<1>(FileSystem::splitExtension(path));
+            if (ext == "cpp"
+                || ext == "cxx"
+                || ext == "cc") {
+                return "sourcecode.cpp.cpp";
+            }
+            return "sourcecode.c.h";
+        }("main.cpp");
         f->path = "main.cpp";
         f->sourceTree = "\"<group>\"";
         xcodeProject->fileReferences.push_back(std::move(f));
@@ -645,15 +659,13 @@ std::shared_ptr<XcodeProject> createXcodeProject()
         group->uuid = "A932DE891BFCD3CC0006E050";
         group->children.push_back(findByUuid(xcodeProject->fileReferences, "A932DE881BFCD3CC0006E050"));
         group->name = "Products";
-        group->sourceTree = "\"<group>\"";
         xcodeProject->groups.push_back(std::move(group));
     }
     {
         auto group = std::make_shared<PBXGroup>();
         group->uuid = "A932DE8A1BFCD3CC0006E050";
         group->children.push_back(findByUuid(xcodeProject->fileReferences, "A932DE8B1BFCD3CC0006E050"));
-        group->path = "MyHidamari";
-        group->sourceTree = "\"<group>\"";
+        group->name = "Source";
         xcodeProject->groups.push_back(std::move(group));
     }
     {
@@ -661,7 +673,6 @@ std::shared_ptr<XcodeProject> createXcodeProject()
         group->uuid = "A932DE7F1BFCD3CC0006E050";
         group->children.push_back(findByUuid(xcodeProject->groups, "A932DE8A1BFCD3CC0006E050"));
         group->children.push_back(findByUuid(xcodeProject->groups, "A932DE891BFCD3CC0006E050"));
-        group->sourceTree = "\"<group>\"";
         xcodeProject->groups.push_back(std::move(group));
     }
 
@@ -693,8 +704,8 @@ std::shared_ptr<XcodeProject> createXcodeProject()
         target->buildPhases.push_back(findByUuid(xcodeProject->sourcesBuildPhases, "A932DE841BFCD3CC0006E050"));
         target->buildPhases.push_back(findByUuid(xcodeProject->frameworkBuildPhases, "A932DE851BFCD3CC0006E050"));
         target->buildPhases.push_back(findByUuid(xcodeProject->copyFilesBuildPhases, "A932DE861BFCD3CC0006E050"));
-        target->name = "MyHidamari";
-        target->productName = "MyHidamari";
+        target->name = options.outputFileName;
+        target->productName = options.outputFileName;
         target->productReference = findByUuid(xcodeProject->fileReferences, "A932DE881BFCD3CC0006E050");
         target->productType = "\"com.apple.product-type.tool\"";
         xcodeProject->nativeTargets.push_back(std::move(target));
@@ -730,6 +741,7 @@ std::shared_ptr<XcodeProject> createXcodeProject()
         xcodeProject->projects.push_back(std::move(project));
     }
 
+    xcodeProject->name = options.outputFileName;
     xcodeProject->archiveVersion = "1";
     xcodeProject->objectVersion = "46";
     xcodeProject->rootObject = findByUuid(xcodeProject->projects, "A932DE801BFCD3CC0006E050");
@@ -834,7 +846,7 @@ void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
                 if (group->path) {
                     printer.printKeyValue("path", *group->path);
                 }
-                printer.printKeyValue("sourceTree", group->sourceTree);
+                printer.printKeyValue("sourceTree", group->getSourceTree());
             printer.endObject();
         printer.endKeyValue();
     }
@@ -904,7 +916,8 @@ void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
                 printer.printKeyValue("buildConfigurationList",
                     project->buildConfigurationList->uuid
                     + " "
-                    + encodeComment("Build configuration list for PBXProject " + encodeDoubleQuotes("MyHidamari")));
+                    + encodeComment("Build configuration list for PBXProject "
+                    + encodeDoubleQuotes(xcodeProject.name)));
                 printer.printKeyValue("compatibilityVersion", project->compatibilityVersion);
                 printer.printKeyValue("developmentRegion", project->developmentRegion);
                 printer.printKeyValue("hasScannedForEncodings", project->hasScannedForEncodings);
@@ -948,7 +961,11 @@ void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
 
     printer.beginSection("XCConfigurationList");
     for (auto & configurationList : xcodeProject.configurationLists) {
-        printer.beginKeyValue(configurationList->uuid + " " + encodeComment("Build configuration list for PBXProject \"MyHidamari\""));
+        printer.beginKeyValue(
+            configurationList->uuid
+            + " "
+            + encodeComment("Build configuration list for PBXProject "
+            + encodeDoubleQuotes(xcodeProject.name)));
             printer.beginObject();
                 printer.printKeyValue("isa", configurationList->isa());
                 printer.printKeyValue("buildConfigurations", configurationList->getBuildConfigurationsString());
@@ -1012,7 +1029,7 @@ GeneratorError Xcode::generateXcodeProject(const CompileOptions& options)
         FileSystem::createDirectories(xcworkspacePath);
     }
 
-    auto xcodeProject = createXcodeProject();
+    auto xcodeProject = createXcodeProject(options);
     {
         const auto pbxprojPath = FileSystem::join(xcodeprojPath, "project.pbxproj");
         std::ofstream stream(pbxprojPath);
