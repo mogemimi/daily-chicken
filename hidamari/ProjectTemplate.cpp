@@ -51,6 +51,9 @@ std::string generateXCWorkSpaceData(const std::string& xcodeprojName)
     return stream.str();
 }
 
+struct XcodeProject;
+struct XcodeObject;
+struct XcodeBuildPhase;
 struct PBXBuildFile;
 struct PBXCopyFilesBuildPhase;
 struct PBXFileReference;
@@ -67,74 +70,155 @@ std::string encodeComment(const std::string& comment)
     return "/* " + comment + " */";
 }
 
-struct PBXBuildFile final {
+struct XcodeObject {
+    virtual ~XcodeObject() = default;
+    virtual std::string getUuid() const noexcept = 0;
+    virtual std::string isa() const noexcept = 0;
+};
+
+struct XcodeBuildPhase : public XcodeObject {
+    virtual ~XcodeBuildPhase() = default;
+    virtual std::string comments() const noexcept = 0;
+};
+
+struct XcodeProject final {
+    std::string archiveVersion;
+    std::string objectVersion;
+    //std::map<std::string, Any> classes;
+    //std::map<std::string, std::shared_ptr<XcodeObject>> objects;
+    std::shared_ptr<PBXProject> rootObject;
+};
+
+struct PBXBuildFile final : public XcodeObject {
+    std::string isa() const noexcept override { return "PBXBuildFile"; }
+    std::string getUuid() const noexcept override { return uuid; }
     std::string uuid;
     std::shared_ptr<PBXFileReference> fileRef;
-
-    std::string isa() const noexcept { return "PBXBuildFile"; }
 };
 
-struct PBXCopyFilesBuildPhase final {
-    std::string isa() const noexcept { return "PBXCopyFilesBuildPhase"; }
-};
-
-struct PBXFileReference final {
+struct PBXFileReference final : public XcodeObject {
+    std::string isa() const noexcept override { return "PBXFileReference"; }
+    std::string getUuid() const noexcept override { return uuid; }
     std::string uuid;
     Optional<std::string> explicitFileType;
     Optional<std::string> includeInIndex;
     Optional<std::string> lastKnownFileType;
     std::string path;
     std::string sourceTree;
-
-    std::string isa() const noexcept { return "PBXFileReference"; }
 };
 
-struct PBXFrameworksBuildPhase final {
-    std::string isa() const noexcept { return "PBXFrameworksBuildPhase"; }
-};
-
-struct PBXGroup final {
+struct PBXGroup final : public XcodeObject {
+    std::string isa() const noexcept override { return "PBXGroup"; }
+    std::string getUuid() const noexcept override { return uuid; }
     std::string uuid;
-
-    // TODO: replace with std::vector<any<std::shared_ptr<PBXFileReference>, std::shared_ptr<PBXGroup>>>
-    std::vector<std::shared_ptr<PBXFileReference>> children;
+    std::vector<std::shared_ptr<XcodeObject>> children;
 
     Optional<std::string> name;
     Optional<std::string> path;
     std::string sourceTree;
 
-    std::string isa() const noexcept { return "PBXGroup"; }
+    std::string getUuidWithComment()
+    {
+        if (name) {
+            return uuid + " " + encodeComment(*name);
+        }
+        if (path) {
+            return uuid + " " + encodeComment(*path);
+        }
+        return uuid;
+    }
+
+    std::vector<std::string> getChildrenString() const
+    {
+        std::vector<std::string> result;
+        for (auto & child : children) {
+            if (auto group = std::dynamic_pointer_cast<PBXGroup>(child)) {
+                result.push_back(group->getUuidWithComment());
+            }
+            else if (auto file = std::dynamic_pointer_cast<PBXFileReference>(child)) {
+                result.push_back(file->uuid + " " + encodeComment(file->path));
+            }
+        }
+        return std::move(result);
+    }
 };
 
-struct PBXNativeTarget final {
-    std::string isa() const noexcept { return "PBXNativeTarget"; }
+struct PBXNativeTarget final : public XcodeObject {
+    std::string isa() const noexcept override { return "PBXNativeTarget"; }
+    std::string getUuid() const noexcept override { return uuid; }
+
+    std::string uuid;
+    std::shared_ptr<XCConfigurationList> buildConfigurationList;
+    std::vector<std::shared_ptr<XcodeBuildPhase>> buildPhases;
+    std::vector<std::string> buildRules;
+    std::vector<std::string> dependencies;
+    std::string name;
+    std::string productName;
+    std::shared_ptr<PBXFileReference> productReference;
+    std::string productType;
+
+    std::vector<std::string> getBuildPhasesString() const
+    {
+        std::vector<std::string> result;
+        for (auto & phase : buildPhases) {
+            result.push_back(phase->getUuid() + " " + encodeComment(phase->comments()));
+        }
+        return std::move(result);
+    }
 };
 
 struct PBXProject final {
     std::string isa() const noexcept { return "PBXProject"; }
 };
 
-struct PBXSourcesBuildPhase final {
+struct PBXCopyFilesBuildPhase final : public XcodeBuildPhase {
+    std::string isa() const noexcept override { return "PBXCopyFilesBuildPhase"; }
+    std::string getUuid() const noexcept override { return uuid; }
     std::string uuid;
-    std::string isa() const noexcept { return "PBXSourcesBuildPhase"; }
     std::string buildActionMask;
-    std::string comments;
+    std::string dstPath;
+    std::string dstSubfolderSpec;
+    std::string runOnlyForDeploymentPostprocessing;
+    std::vector<std::string> files;
+
+    std::string comments() const noexcept override { return "CopyFiles"; }
+};
+
+struct PBXFrameworksBuildPhase final : public XcodeBuildPhase {
+    std::string isa() const noexcept override { return "PBXFrameworksBuildPhase"; }
+    std::string getUuid() const noexcept override { return uuid; }
+    std::string uuid;
+    std::string buildActionMask;
+    std::vector<std::string> files;
+    std::string runOnlyForDeploymentPostprocessing;
+
+    std::string comments() const noexcept override { return "Frameworks"; }
+};
+
+struct PBXSourcesBuildPhase final : public XcodeBuildPhase {
+    std::string isa() const noexcept override { return "PBXSourcesBuildPhase"; }
+    std::string getUuid() const noexcept override { return uuid; }
+    std::string uuid;
+    std::string buildActionMask;
     std::vector<std::shared_ptr<PBXBuildFile>> files;
     std::string runOnlyForDeploymentPostprocessing;
+
+    std::string comments() const noexcept override { return "Sources"; }
 
     std::vector<std::string> getFileListString() const
     {
         std::vector<std::string> result;
         for (auto & buildFile : files) {
-            result.push_back(buildFile->uuid + " " + encodeComment(buildFile->fileRef->path + " in " + comments));
+            result.push_back(buildFile->uuid + " " + encodeComment(buildFile->fileRef->path + " in " + comments()));
         }
         return std::move(result);
     }
 };
 
-struct XCBuildConfiguration final {
+struct XCBuildConfiguration final : public XcodeObject {
+    std::string isa() const noexcept override { return "XCBuildConfiguration"; }
+    std::string getUuid() const noexcept override { return uuid; }
     std::string uuid;
-    std::string isa() const noexcept { return "XCBuildConfiguration"; }
     std::map<std::string, Any> buildSettings;
     std::string name;
 
@@ -149,8 +233,22 @@ struct XCBuildConfiguration final {
     }
 };
 
-struct XCConfigurationList final {
-    std::string isa() const noexcept { return "XCConfigurationList"; }
+struct XCConfigurationList final : public XcodeObject {
+    std::string isa() const noexcept override { return "XCConfigurationList"; }
+    std::string getUuid() const noexcept override { return uuid; }
+    std::string uuid;
+    std::vector<std::shared_ptr<XCBuildConfiguration>> buildConfigurations;
+    std::string defaultConfigurationIsVisible;
+    Optional<std::string> defaultConfigurationName;
+
+    std::vector<std::string> getBuildConfigurationsString() const
+    {
+        std::vector<std::string> result;
+        for (auto & buildConfig : buildConfigurations) {
+            result.push_back(buildConfig->uuid + " " + encodeComment(buildConfig->name));
+        }
+        return std::move(result);
+    }
 };
 
 struct XcodePrinterSettings {
@@ -299,8 +397,17 @@ auto findByPath(Container & c, const std::string& path)
     });
 }
 
+template <typename Container>
+auto findByUuid(Container & c, const std::string& uuid)
+{
+    return findIf(c, [&](const typename Container::value_type& v) {
+        return v->uuid == uuid;
+    });
+}
+
 void printObject(XcodePrinter & printer, const std::map<std::string, Any>& object)
 {
+    ///@todo sorting by key [A-Z]
     printer.beginObject();
     for (auto & pair : object) {
         auto & key = pair.first;
@@ -317,8 +424,6 @@ void printObject(XcodePrinter & printer, const std::map<std::string, Any>& objec
 
 void printObjects(XcodePrinter & printer)
 {
-    constexpr bool isSingleLine = true;
-
 #if 1 // ayafuya rocket~~~~~~~
     std::vector<std::shared_ptr<PBXFileReference>> pbxFileReferenceList;
     {
@@ -339,28 +444,27 @@ void printObjects(XcodePrinter & printer)
         pbxFileReferenceList.push_back(std::move(f));
     }
 
-    std::vector<std::shared_ptr<PBXSourcesBuildPhase>> pbxSourcesBuildPhaseList;
+    std::vector<std::shared_ptr<PBXSourcesBuildPhase>> sourcesBuildPhases;
     {
         auto phase = std::make_shared<PBXSourcesBuildPhase>();
         phase->uuid = "A932DE841BFCD3CC0006E050";
         phase->buildActionMask = "2147483647";
         phase->runOnlyForDeploymentPostprocessing = "0";
-        phase->comments = "Sources";
         {
             auto file = std::make_shared<PBXBuildFile>();
             file->uuid = "A932DE8C1BFCD3CC0006E050";
             file->fileRef = findByPath(pbxFileReferenceList, "main.cpp");
             phase->files.push_back(std::move(file));
         }
-        pbxSourcesBuildPhaseList.push_back(std::move(phase));
+        sourcesBuildPhases.push_back(std::move(phase));
     }
 
-    std::vector<XCBuildConfiguration> buildConfigurations;
+    std::vector<std::shared_ptr<XCBuildConfiguration>> buildConfigurations;
     {
-        XCBuildConfiguration config;
+        auto buildConfiguration = std::make_shared<XCBuildConfiguration>();
+        auto & config = *buildConfiguration;
         config.uuid = "A932DE8D1BFCD3CC0006E050";
         config.name = "Debug";
-        config.addBuildSettings("PRODUCT_NAME", "\"$(TARGET_NAME)\"");
         config.addBuildSettings("ALWAYS_SEARCH_USER_PATHS", "NO");
         config.addBuildSettings("CLANG_CXX_LANGUAGE_STANDARD", "\"gnu++0x\"");
         config.addBuildSettings("CLANG_CXX_LIBRARY", "\"libc++\"");
@@ -398,10 +502,11 @@ void printObjects(XcodePrinter & printer)
         config.addBuildSettings("MTL_ENABLE_DEBUG_INFO", "YES");
         config.addBuildSettings("ONLY_ACTIVE_ARCH", "YES");
         config.addBuildSettings("SDKROOT", "macosx");
-        buildConfigurations.push_back(std::move(config));
+        buildConfigurations.push_back(std::move(buildConfiguration));
     }
     {
-        XCBuildConfiguration config;
+        auto buildConfiguration = std::make_shared<XCBuildConfiguration>();
+        auto & config = *buildConfiguration;
         config.uuid = "A932DE8E1BFCD3CC0006E050";
         config.name = "Release";
         config.addBuildSettings("ALWAYS_SEARCH_USER_PATHS", "NO");
@@ -434,30 +539,131 @@ void printObjects(XcodePrinter & printer)
         config.addBuildSettings("MACOSX_DEPLOYMENT_TARGET", "10.11");
         config.addBuildSettings("MTL_ENABLE_DEBUG_INFO", "NO");
         config.addBuildSettings("SDKROOT", "macosx");
-        buildConfigurations.push_back(std::move(config));
+        buildConfigurations.push_back(std::move(buildConfiguration));
     }
     {
-        XCBuildConfiguration config;
+        auto buildConfiguration = std::make_shared<XCBuildConfiguration>();
+        auto & config = *buildConfiguration;
         config.uuid = "A932DE901BFCD3CC0006E050";
         config.name = "Debug";
         config.addBuildSettings("PRODUCT_NAME", "\"$(TARGET_NAME)\"");
-        buildConfigurations.push_back(std::move(config));
+        buildConfigurations.push_back(std::move(buildConfiguration));
     }
     {
-        XCBuildConfiguration config;
+        auto buildConfiguration = std::make_shared<XCBuildConfiguration>();
+        auto & config = *buildConfiguration;
         config.uuid = "A932DE911BFCD3CC0006E050";
         config.name = "Release";
         config.addBuildSettings("PRODUCT_NAME", "\"$(TARGET_NAME)\"");
-        buildConfigurations.push_back(std::move(config));
+        buildConfigurations.push_back(std::move(buildConfiguration));
     }
+
+    std::vector<std::shared_ptr<XCConfigurationList>> configurationLists;
+    {
+        auto configurationList = std::make_shared<XCConfigurationList>();
+        configurationList->uuid = "A932DE831BFCD3CC0006E050";
+        configurationList->buildConfigurations.push_back(findByUuid(buildConfigurations, "A932DE8D1BFCD3CC0006E050"));
+        configurationList->buildConfigurations.push_back(findByUuid(buildConfigurations, "A932DE8E1BFCD3CC0006E050"));
+        configurationList->defaultConfigurationIsVisible = "0";
+        configurationList->defaultConfigurationName = "Release";
+        configurationLists.push_back(std::move(configurationList));
+    }
+    {
+        auto configurationList = std::make_shared<XCConfigurationList>();
+        configurationList->uuid = "A932DE8F1BFCD3CC0006E050";
+        configurationList->buildConfigurations.push_back(findByUuid(buildConfigurations, "A932DE901BFCD3CC0006E050"));
+        configurationList->buildConfigurations.push_back(findByUuid(buildConfigurations, "A932DE911BFCD3CC0006E050"));
+        configurationList->defaultConfigurationIsVisible = "0";
+        configurationList->defaultConfigurationName = "Release";
+        configurationLists.push_back(std::move(configurationList));
+    }
+
+    std::vector<std::shared_ptr<PBXGroup>> pbxGroups;
+    {
+        auto group = std::make_shared<PBXGroup>();
+        group->uuid = "A932DE891BFCD3CC0006E050";
+        group->children.push_back(findByUuid(pbxFileReferenceList, "A932DE881BFCD3CC0006E050"));
+        group->name = "Products";
+        group->sourceTree = "\"<group>\"";
+        pbxGroups.push_back(std::move(group));
+    }
+    {
+        auto group = std::make_shared<PBXGroup>();
+        group->uuid = "A932DE8A1BFCD3CC0006E050";
+        group->children.push_back(findByUuid(pbxFileReferenceList, "A932DE8B1BFCD3CC0006E050"));
+        group->path = "MyHidamari";
+        group->sourceTree = "\"<group>\"";
+        pbxGroups.push_back(std::move(group));
+    }
+    {
+        auto group = std::make_shared<PBXGroup>();
+        group->uuid = "A932DE7F1BFCD3CC0006E050";
+        group->children.push_back(findByUuid(pbxGroups, "A932DE8A1BFCD3CC0006E050"));
+        group->children.push_back(findByUuid(pbxGroups, "A932DE891BFCD3CC0006E050"));
+        group->sourceTree = "\"<group>\"";
+        pbxGroups.push_back(std::move(group));
+    }
+
+    std::vector<std::shared_ptr<PBXFrameworksBuildPhase>> frameworkBuildPhases;
+    {
+        auto phase = std::make_shared<PBXFrameworksBuildPhase>();
+        phase->uuid = "A932DE851BFCD3CC0006E050";
+        phase->buildActionMask = "2147483647";
+        phase->runOnlyForDeploymentPostprocessing = "0";
+        frameworkBuildPhases.push_back(std::move(phase));
+    }
+
+    std::vector<std::shared_ptr<PBXCopyFilesBuildPhase>> copyFilesBuildPhases;
+    {
+        auto phase = std::make_shared<PBXCopyFilesBuildPhase>();
+        phase->uuid = "A932DE861BFCD3CC0006E050";
+        phase->buildActionMask = "2147483647";
+        phase->dstPath = "/usr/share/man/man1/";
+        phase->dstSubfolderSpec = "0";
+        phase->runOnlyForDeploymentPostprocessing = "1";
+        copyFilesBuildPhases.push_back(std::move(phase));
+    }
+
+    std::vector<std::shared_ptr<PBXNativeTarget>> nativeTargets;
+    {
+        auto target = std::make_shared<PBXNativeTarget>();
+        target->uuid = "A932DE871BFCD3CC0006E050";
+        target->buildConfigurationList = findByUuid(configurationLists, "A932DE8F1BFCD3CC0006E050");
+        target->buildPhases.push_back(findByUuid(sourcesBuildPhases, "A932DE841BFCD3CC0006E050"));
+        target->buildPhases.push_back(findByUuid(frameworkBuildPhases, "A932DE851BFCD3CC0006E050"));
+        target->buildPhases.push_back(findByUuid(copyFilesBuildPhases, "A932DE861BFCD3CC0006E050"));
+        target->name = "MyHidamari";
+        target->productName = "MyHidamari";
+        target->productReference = findByUuid(pbxFileReferenceList, "A932DE881BFCD3CC0006E050");
+        target->productType = "\"com.apple.product-type.tool\"";
+    }
+
+    std::sort(std::begin(pbxGroups), std::end(pbxGroups),
+        [](const std::shared_ptr<PBXGroup>& a, const std::shared_ptr<PBXGroup>& b) {
+            auto cost = [](const PBXGroup& group) {
+                int c = 0;
+                if (!group.name && !group.path) {
+                    c += 42;
+                }
+                for (auto & child : group.children) {
+                    if (child->isa() == "PBXGroup") {
+                        c += 1;
+                    }
+                }
+                return c;
+            };
+            return cost(*a) >= cost(*b);
+        });
 
 #endif // ayafuya rocket~~~~~~~
 
+    constexpr bool isSingleLine = true;
+
     printer.beginSection("PBXBuildFile");
-    for (auto & buildPhase : pbxSourcesBuildPhaseList) {
-        for (auto & f : buildPhase->files) {
+    for (auto & phase : sourcesBuildPhases) {
+        for (auto & f : phase->files) {
             auto & buildFile = *f;
-            printer.beginKeyValue(buildFile.uuid + " " + encodeComment(buildFile.fileRef->path + " in " + buildPhase->comments));
+            printer.beginKeyValue(buildFile.uuid + " " + encodeComment(buildFile.fileRef->path + " in " + phase->comments()));
                 printer.beginObject(isSingleLine);
                 printer.printKeyValue("isa", buildFile.isa());
                 printer.printKeyValue("fileRef", buildFile.fileRef->uuid + " " + encodeComment(buildFile.fileRef->path));
@@ -468,16 +674,18 @@ void printObjects(XcodePrinter & printer)
     printer.endSection();
 
     printer.beginSection("PBXCopyFilesBuildPhase");
-        printer.beginKeyValue("A932DE861BFCD3CC0006E050 /* CopyFiles */");
-        printer.beginObject();
-        printer.printKeyValue("isa", "PBXCopyFilesBuildPhase");
-        printer.printKeyValue("buildActionMask", "2147483647");
-        printer.printKeyValue("dstPath", "/usr/share/man/man1/");
-        printer.printKeyValue("dstSubfolderSpec", "0");
-        printer.printKeyValue("files", std::vector<std::string>{});
-        printer.printKeyValue("runOnlyForDeploymentPostprocessing", "1");
-        printer.endObject();
+    for (auto & phase : copyFilesBuildPhases) {
+        printer.beginKeyValue(phase->uuid + " " + encodeComment(phase->comments()));
+            printer.beginObject();
+            printer.printKeyValue("isa", phase->isa());
+            printer.printKeyValue("buildActionMask", phase->buildActionMask);
+            printer.printKeyValue("dstPath", phase->dstPath);
+            printer.printKeyValue("dstSubfolderSpec", phase->dstSubfolderSpec);
+            printer.printKeyValue("files", phase->files);
+            printer.printKeyValue("runOnlyForDeploymentPostprocessing", phase->runOnlyForDeploymentPostprocessing);
+            printer.endObject();
         printer.endKeyValue();
+    }
     printer.endSection();
 
     printer.beginSection("PBXFileReference");
@@ -503,69 +711,56 @@ void printObjects(XcodePrinter & printer)
     printer.endSection();
 
     printer.beginSection("PBXFrameworksBuildPhase");
-        printer.beginKeyValue("A932DE851BFCD3CC0006E050 /* Frameworks */");
+    for (auto & phase : frameworkBuildPhases) {
+        printer.beginKeyValue(phase->getUuid() + " " + encodeComment(phase->comments()));
             printer.beginObject();
-                printer.printKeyValue("isa", "PBXFrameworksBuildPhase");
-                printer.printKeyValue("buildActionMask", "2147483647");
-                printer.printKeyValue("files", std::vector<std::string>{});
-                printer.printKeyValue("runOnlyForDeploymentPostprocessing", "0");
+                printer.printKeyValue("isa", phase->isa());
+                printer.printKeyValue("buildActionMask", phase->buildActionMask);
+                printer.printKeyValue("files", phase->files);
+                printer.printKeyValue("runOnlyForDeploymentPostprocessing", phase->runOnlyForDeploymentPostprocessing);
             printer.endObject();
         printer.endKeyValue();
+    }
     printer.endSection();
 
     printer.beginSection("PBXGroup");
-        printer.beginKeyValue("A932DE7F1BFCD3CC0006E050");
+    for (auto & group : pbxGroups) {
+        printer.beginKeyValue(group->getUuidWithComment());
             printer.beginObject();
-                printer.printKeyValue("isa", "PBXGroup");
-                printer.printKeyValue("children", std::vector<std::string>{
-                    "A932DE8A1BFCD3CC0006E050 /* MyHidamari */",
-                    "A932DE891BFCD3CC0006E050 /* Products */",
-                });
-                printer.printKeyValue("sourceTree", "\"<group>\"");
+                printer.printKeyValue("isa", group->isa());
+                printer.printKeyValue("children", group->getChildrenString());
+                if (group->name) {
+                    printer.printKeyValue("name", *group->name);
+                }
+                if (group->path) {
+                    printer.printKeyValue("path", *group->path);
+                }
+                printer.printKeyValue("sourceTree", group->sourceTree);
             printer.endObject();
         printer.endKeyValue();
-
-        printer.beginKeyValue("A932DE891BFCD3CC0006E050 /* Products */");
-            printer.beginObject();
-                printer.printKeyValue("isa", "PBXGroup");
-                printer.printKeyValue("children", std::vector<std::string>{
-                    "A932DE881BFCD3CC0006E050 /* MyHidamari */",
-                });
-                printer.printKeyValue("name", "Products");
-                printer.printKeyValue("sourceTree", "\"<group>\"");
-            printer.endObject();
-        printer.endKeyValue();
-
-        printer.beginKeyValue("A932DE8A1BFCD3CC0006E050 /* MyHidamari */");
-            printer.beginObject();
-                printer.printKeyValue("isa", "PBXGroup");
-                printer.printKeyValue("children", std::vector<std::string>{
-                    "A932DE8B1BFCD3CC0006E050 /* main.cpp */",
-                });
-                printer.printKeyValue("path", "MyHidamari");
-                printer.printKeyValue("sourceTree", "\"<group>\"");
-            printer.endObject();
-        printer.endKeyValue();
+    }
     printer.endSection();
 
     printer.beginSection("PBXNativeTarget");
-        printer.beginKeyValue("A932DE871BFCD3CC0006E050 /* MyHidamari */");
+    for (auto & target : nativeTargets) {
+        printer.beginKeyValue(target->uuid + " " + encodeComment(target->name));
             printer.beginObject();
-                printer.printKeyValue("isa", "PBXNativeTarget");
-                printer.printKeyValue("buildConfigurationList", "A932DE8F1BFCD3CC0006E050 /* Build configuration list for PBXNativeTarget \"MyHidamari\" */");
-                printer.printKeyValue("buildPhases", std::vector<std::string>{
-                    "A932DE841BFCD3CC0006E050 /* Sources */",
-                    "A932DE851BFCD3CC0006E050 /* Frameworks */",
-                    "A932DE861BFCD3CC0006E050 /* CopyFiles */",
-                });
-                printer.printKeyValue("buildRules", std::vector<std::string>{});
-                printer.printKeyValue("dependencies", std::vector<std::string>{});
-                printer.printKeyValue("name", "MyHidamari");
-                printer.printKeyValue("productName", "MyHidamari");
-                printer.printKeyValue("productReference", "A932DE881BFCD3CC0006E050 /* MyHidamari */");
-                printer.printKeyValue("productType", "\"com.apple.product-type.tool\"");
+                printer.printKeyValue("isa", target->isa());
+                printer.printKeyValue("buildConfigurationList",
+                    target->buildConfigurationList->uuid
+                    + " "
+                    + encodeComment("Build configuration list for " + target->isa() + " \""+ target->name +"\""));
+                printer.printKeyValue("buildPhases", target->getBuildPhasesString());
+                printer.printKeyValue("buildRules", target->buildRules);
+                printer.printKeyValue("dependencies", target->dependencies);
+                printer.printKeyValue("name", target->name);
+                printer.printKeyValue("productName", target->productName);
+                printer.printKeyValue("productReference",
+                    target->productReference->uuid + " " + encodeComment(target->productReference->path));
+                printer.printKeyValue("productType", target->productType);
             printer.endObject();
         printer.endKeyValue();
+    }
     printer.endSection();
 
     printer.beginSection("PBXProject");
@@ -604,13 +799,13 @@ void printObjects(XcodePrinter & printer)
     printer.endSection();
 
     printer.beginSection("PBXSourcesBuildPhase");
-    for (auto & buildPhase : pbxSourcesBuildPhaseList) {
-        printer.beginKeyValue(buildPhase->uuid + " " + encodeComment(buildPhase->comments));
+    for (auto & phase : sourcesBuildPhases) {
+        printer.beginKeyValue(phase->uuid + " " + encodeComment(phase->comments()));
             printer.beginObject();
-                printer.printKeyValue("isa", buildPhase->isa());
-                printer.printKeyValue("buildActionMask", buildPhase->buildActionMask);
-                printer.printKeyValue("files", buildPhase->getFileListString());
-                printer.printKeyValue("runOnlyForDeploymentPostprocessing", buildPhase->runOnlyForDeploymentPostprocessing);
+                printer.printKeyValue("isa", phase->isa());
+                printer.printKeyValue("buildActionMask", phase->buildActionMask);
+                printer.printKeyValue("files", phase->getFileListString());
+                printer.printKeyValue("runOnlyForDeploymentPostprocessing", phase->runOnlyForDeploymentPostprocessing);
             printer.endObject();
         printer.endKeyValue();
     }
@@ -618,41 +813,31 @@ void printObjects(XcodePrinter & printer)
 
     printer.beginSection("XCBuildConfiguration");
     for (auto & config : buildConfigurations) {
-        printer.printKeyValue(config.uuid + " " + encodeComment(config.name), [&] {
+        printer.printKeyValue(config->uuid + " " + encodeComment(config->name), [&] {
             printer.beginObject();
-                printer.printKeyValue("isa", config.isa());
+                printer.printKeyValue("isa", config->isa());
                 printer.printKeyValue("buildSettings", [&] {
-                    printObject(printer, config.buildSettings);
+                    printObject(printer, config->buildSettings);
                 });
-                printer.printKeyValue("name", config.name);
+                printer.printKeyValue("name", config->name);
             printer.endObject();
         });
     }
     printer.endSection();
 
     printer.beginSection("XCConfigurationList");
-        printer.beginKeyValue("A932DE831BFCD3CC0006E050 /* Build configuration list for PBXProject \"MyHidamari\" */");
+    for (auto & configurationList : configurationLists) {
+        printer.beginKeyValue(configurationList->uuid + " " + encodeComment("Build configuration list for PBXProject \"MyHidamari\""));
             printer.beginObject();
-                printer.printKeyValue("isa", "XCConfigurationList");
-                printer.printKeyValue("buildConfigurations", std::vector<std::string>{
-                    "A932DE8D1BFCD3CC0006E050 /* Debug */",
-                    "A932DE8E1BFCD3CC0006E050 /* Release */",
-                });
-                printer.printKeyValue("defaultConfigurationIsVisible", "0");
-                printer.printKeyValue("defaultConfigurationName", "Release");
+                printer.printKeyValue("isa", configurationList->isa());
+                printer.printKeyValue("buildConfigurations", configurationList->getBuildConfigurationsString());
+                printer.printKeyValue("defaultConfigurationIsVisible", configurationList->defaultConfigurationIsVisible);
+                if (configurationList->defaultConfigurationName) {
+                    printer.printKeyValue("defaultConfigurationName", *configurationList->defaultConfigurationName);
+                }
             printer.endObject();
         printer.endKeyValue();
-
-        printer.beginKeyValue("A932DE8F1BFCD3CC0006E050 /* Build configuration list for PBXNativeTarget \"MyHidamari\" */");
-            printer.beginObject();
-                printer.printKeyValue("isa", "XCConfigurationList");
-                printer.printKeyValue("buildConfigurations", std::vector<std::string>{
-                    "A932DE901BFCD3CC0006E050 /* Debug */",
-                    "A932DE911BFCD3CC0006E050 /* Release */",
-                });
-                printer.printKeyValue("defaultConfigurationIsVisible", "0");
-            printer.endObject();
-        printer.endKeyValue();
+    }
     printer.endSection();
 }
 
