@@ -30,8 +30,10 @@ void setupCommandLineParser(CommandLineParser & parser)
     parser.addArgument("-generator=", CommandLineArgumentType::JoinedOrSeparate,
         "Generate project for the project file format "
         "(xcode, msbuild, cmake or gyp)");
-    parser.addArgument("-output=", CommandLineArgumentType::JoinedOrSeparate,
-        "TODO");
+    parser.addArgument("-o", CommandLineArgumentType::JoinedOrSeparate,
+        "Write output to <file>");
+    parser.addArgument("-generator-output=", CommandLineArgumentType::JoinedOrSeparate,
+        "Generate build files under the <dir>");
 }
 
 #if 0
@@ -68,7 +70,11 @@ int main(int argc, char *argv[])
         return 1;
     }
     if (parser.exists("-h") || parser.exists("-help")) {
-        std::cout << parser.getHelpText() << std::endl;
+        std::cout
+            << "Usage: hidamari [options ...] [build file ...]" << std::endl
+            << std::endl
+            << "Options:" << std::endl
+            << parser.getHelpText() << std::endl;
         return 0;
     }
     if (parser.getPaths().empty()) {
@@ -95,9 +101,13 @@ int main(int argc, char *argv[])
         options.sources.push_back(path);
     }
 
-    options.outputPath = "MyHoge";
-    for (auto & path : parser.getValues("-output=")) {
-        options.outputPath = path;
+    for (auto & path : parser.getValues("-generator-output=")) {
+        options.generatorOutputDirectory = path;
+        break;
+    }
+    options.outputFileName = "MyHoge";
+    for (auto & path : parser.getValues("-o")) {
+        options.outputFileName = path;
         break;
     }
     for (auto & path : parser.getValues("-generator=")) {

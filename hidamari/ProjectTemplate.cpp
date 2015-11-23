@@ -75,7 +75,13 @@ std::string encodeDoubleQuotes(const std::string& comment)
     return '\"' + comment + '\"';
 }
 
-struct XcodeObject {
+struct Noncopyable {
+    Noncopyable() = default;
+    Noncopyable(const Noncopyable&) = delete;
+    Noncopyable & operator=(const Noncopyable&) = delete;
+};
+
+struct XcodeObject : Noncopyable {
     virtual ~XcodeObject() = default;
     virtual std::string getUuid() const noexcept = 0;
     virtual std::string isa() const noexcept = 0;
@@ -93,12 +99,22 @@ struct XcodeTargetAttribute final {
     Optional<std::string> TestTargetID;
 };
 
-struct XcodeProject final {
+struct XcodeProject final : Noncopyable {
     std::string archiveVersion;
     std::string objectVersion;
     //std::map<std::string, Any> classes;
     //std::map<std::string, std::shared_ptr<XcodeObject>> objects;
     std::shared_ptr<PBXProject> rootObject;
+
+    std::vector<std::shared_ptr<XCBuildConfiguration>> buildConfigurations;
+    std::vector<std::shared_ptr<XCConfigurationList>> configurationLists;
+    std::vector<std::shared_ptr<PBXFileReference>> fileReferences;
+    std::vector<std::shared_ptr<PBXSourcesBuildPhase>> sourcesBuildPhases;
+    std::vector<std::shared_ptr<PBXGroup>> groups;
+    std::vector<std::shared_ptr<PBXFrameworksBuildPhase>> frameworkBuildPhases;
+    std::vector<std::shared_ptr<PBXCopyFilesBuildPhase>> copyFilesBuildPhases;
+    std::vector<std::shared_ptr<PBXNativeTarget>> nativeTargets;
+    std::vector<std::shared_ptr<PBXProject>> projects;
 };
 
 struct PBXBuildFile final : public XcodeObject {
@@ -466,10 +482,11 @@ void printObject(XcodePrinter & printer, const std::map<std::string, Any>& objec
     printer.endObject();
 }
 
-void printObjects(XcodePrinter & printer)
+std::shared_ptr<XcodeProject> createXcodeProject()
 {
-#if 1 // ayafuya rocket~~~~~~~
-    std::vector<std::shared_ptr<PBXFileReference>> pbxFileReferenceList;
+    auto xcodeProject = std::make_shared<XcodeProject>();
+
+    // PBXFileReference
     {
         auto f = std::make_shared<PBXFileReference>();
         f->uuid = "A932DE881BFCD3CC0006E050";
@@ -477,7 +494,7 @@ void printObjects(XcodePrinter & printer)
         f->includeInIndex = "0";
         f->path = "MyHidamari";
         f->sourceTree = "BUILT_PRODUCTS_DIR";
-        pbxFileReferenceList.push_back(std::move(f));
+        xcodeProject->fileReferences.push_back(std::move(f));
     }
     {
         auto f = std::make_shared<PBXFileReference>();
@@ -485,10 +502,10 @@ void printObjects(XcodePrinter & printer)
         f->lastKnownFileType = "sourcecode.cpp.cpp";
         f->path = "main.cpp";
         f->sourceTree = "\"<group>\"";
-        pbxFileReferenceList.push_back(std::move(f));
+        xcodeProject->fileReferences.push_back(std::move(f));
     }
 
-    std::vector<std::shared_ptr<PBXSourcesBuildPhase>> sourcesBuildPhases;
+    // PBXSourcesBuildPhase
     {
         auto phase = std::make_shared<PBXSourcesBuildPhase>();
         phase->uuid = "A932DE841BFCD3CC0006E050";
@@ -497,13 +514,13 @@ void printObjects(XcodePrinter & printer)
         {
             auto file = std::make_shared<PBXBuildFile>();
             file->uuid = "A932DE8C1BFCD3CC0006E050";
-            file->fileRef = findByPath(pbxFileReferenceList, "main.cpp");
+            file->fileRef = findByPath(xcodeProject->fileReferences, "main.cpp");
             phase->files.push_back(std::move(file));
         }
-        sourcesBuildPhases.push_back(std::move(phase));
+        xcodeProject->sourcesBuildPhases.push_back(std::move(phase));
     }
 
-    std::vector<std::shared_ptr<XCBuildConfiguration>> buildConfigurations;
+    // XCBuildConfiguration
     {
         auto buildConfiguration = std::make_shared<XCBuildConfiguration>();
         auto & config = *buildConfiguration;
@@ -546,7 +563,7 @@ void printObjects(XcodePrinter & printer)
         config.addBuildSettings("MTL_ENABLE_DEBUG_INFO", "YES");
         config.addBuildSettings("ONLY_ACTIVE_ARCH", "YES");
         config.addBuildSettings("SDKROOT", "macosx");
-        buildConfigurations.push_back(std::move(buildConfiguration));
+        xcodeProject->buildConfigurations.push_back(std::move(buildConfiguration));
     }
     {
         auto buildConfiguration = std::make_shared<XCBuildConfiguration>();
@@ -583,7 +600,7 @@ void printObjects(XcodePrinter & printer)
         config.addBuildSettings("MACOSX_DEPLOYMENT_TARGET", "10.11");
         config.addBuildSettings("MTL_ENABLE_DEBUG_INFO", "NO");
         config.addBuildSettings("SDKROOT", "macosx");
-        buildConfigurations.push_back(std::move(buildConfiguration));
+        xcodeProject->buildConfigurations.push_back(std::move(buildConfiguration));
     }
     {
         auto buildConfiguration = std::make_shared<XCBuildConfiguration>();
@@ -591,7 +608,7 @@ void printObjects(XcodePrinter & printer)
         config.uuid = "A932DE901BFCD3CC0006E050";
         config.name = "Debug";
         config.addBuildSettings("PRODUCT_NAME", "\"$(TARGET_NAME)\"");
-        buildConfigurations.push_back(std::move(buildConfiguration));
+        xcodeProject->buildConfigurations.push_back(std::move(buildConfiguration));
     }
     {
         auto buildConfiguration = std::make_shared<XCBuildConfiguration>();
@@ -599,65 +616,65 @@ void printObjects(XcodePrinter & printer)
         config.uuid = "A932DE911BFCD3CC0006E050";
         config.name = "Release";
         config.addBuildSettings("PRODUCT_NAME", "\"$(TARGET_NAME)\"");
-        buildConfigurations.push_back(std::move(buildConfiguration));
+        xcodeProject->buildConfigurations.push_back(std::move(buildConfiguration));
     }
 
-    std::vector<std::shared_ptr<XCConfigurationList>> configurationLists;
+    // XCConfigurationList
     {
         auto configurationList = std::make_shared<XCConfigurationList>();
         configurationList->uuid = "A932DE831BFCD3CC0006E050";
-        configurationList->buildConfigurations.push_back(findByUuid(buildConfigurations, "A932DE8D1BFCD3CC0006E050"));
-        configurationList->buildConfigurations.push_back(findByUuid(buildConfigurations, "A932DE8E1BFCD3CC0006E050"));
+        configurationList->buildConfigurations.push_back(findByUuid(xcodeProject->buildConfigurations, "A932DE8D1BFCD3CC0006E050"));
+        configurationList->buildConfigurations.push_back(findByUuid(xcodeProject->buildConfigurations, "A932DE8E1BFCD3CC0006E050"));
         configurationList->defaultConfigurationIsVisible = "0";
         configurationList->defaultConfigurationName = "Release";
-        configurationLists.push_back(std::move(configurationList));
+        xcodeProject->configurationLists.push_back(std::move(configurationList));
     }
     {
         auto configurationList = std::make_shared<XCConfigurationList>();
         configurationList->uuid = "A932DE8F1BFCD3CC0006E050";
-        configurationList->buildConfigurations.push_back(findByUuid(buildConfigurations, "A932DE901BFCD3CC0006E050"));
-        configurationList->buildConfigurations.push_back(findByUuid(buildConfigurations, "A932DE911BFCD3CC0006E050"));
+        configurationList->buildConfigurations.push_back(findByUuid(xcodeProject->buildConfigurations, "A932DE901BFCD3CC0006E050"));
+        configurationList->buildConfigurations.push_back(findByUuid(xcodeProject->buildConfigurations, "A932DE911BFCD3CC0006E050"));
         configurationList->defaultConfigurationIsVisible = "0";
         configurationList->defaultConfigurationName = "Release";
-        configurationLists.push_back(std::move(configurationList));
+        xcodeProject->configurationLists.push_back(std::move(configurationList));
     }
 
-    std::vector<std::shared_ptr<PBXGroup>> pbxGroups;
+    // PBXGroup
     {
         auto group = std::make_shared<PBXGroup>();
         group->uuid = "A932DE891BFCD3CC0006E050";
-        group->children.push_back(findByUuid(pbxFileReferenceList, "A932DE881BFCD3CC0006E050"));
+        group->children.push_back(findByUuid(xcodeProject->fileReferences, "A932DE881BFCD3CC0006E050"));
         group->name = "Products";
         group->sourceTree = "\"<group>\"";
-        pbxGroups.push_back(std::move(group));
+        xcodeProject->groups.push_back(std::move(group));
     }
     {
         auto group = std::make_shared<PBXGroup>();
         group->uuid = "A932DE8A1BFCD3CC0006E050";
-        group->children.push_back(findByUuid(pbxFileReferenceList, "A932DE8B1BFCD3CC0006E050"));
+        group->children.push_back(findByUuid(xcodeProject->fileReferences, "A932DE8B1BFCD3CC0006E050"));
         group->path = "MyHidamari";
         group->sourceTree = "\"<group>\"";
-        pbxGroups.push_back(std::move(group));
+        xcodeProject->groups.push_back(std::move(group));
     }
     {
         auto group = std::make_shared<PBXGroup>();
         group->uuid = "A932DE7F1BFCD3CC0006E050";
-        group->children.push_back(findByUuid(pbxGroups, "A932DE8A1BFCD3CC0006E050"));
-        group->children.push_back(findByUuid(pbxGroups, "A932DE891BFCD3CC0006E050"));
+        group->children.push_back(findByUuid(xcodeProject->groups, "A932DE8A1BFCD3CC0006E050"));
+        group->children.push_back(findByUuid(xcodeProject->groups, "A932DE891BFCD3CC0006E050"));
         group->sourceTree = "\"<group>\"";
-        pbxGroups.push_back(std::move(group));
+        xcodeProject->groups.push_back(std::move(group));
     }
 
-    std::vector<std::shared_ptr<PBXFrameworksBuildPhase>> frameworkBuildPhases;
+    // PBXFrameworksBuildPhase
     {
         auto phase = std::make_shared<PBXFrameworksBuildPhase>();
         phase->uuid = "A932DE851BFCD3CC0006E050";
         phase->buildActionMask = "2147483647";
         phase->runOnlyForDeploymentPostprocessing = "0";
-        frameworkBuildPhases.push_back(std::move(phase));
+        xcodeProject->frameworkBuildPhases.push_back(std::move(phase));
     }
 
-    std::vector<std::shared_ptr<PBXCopyFilesBuildPhase>> copyFilesBuildPhases;
+    // PBXCopyFilesBuildPhase
     {
         auto phase = std::make_shared<PBXCopyFilesBuildPhase>();
         phase->uuid = "A932DE861BFCD3CC0006E050";
@@ -665,38 +682,38 @@ void printObjects(XcodePrinter & printer)
         phase->dstPath = "/usr/share/man/man1/";
         phase->dstSubfolderSpec = "0";
         phase->runOnlyForDeploymentPostprocessing = "1";
-        copyFilesBuildPhases.push_back(std::move(phase));
+        xcodeProject->copyFilesBuildPhases.push_back(std::move(phase));
     }
 
-    std::vector<std::shared_ptr<PBXNativeTarget>> nativeTargets;
+    // PBXNativeTarget
     {
         auto target = std::make_shared<PBXNativeTarget>();
         target->uuid = "A932DE871BFCD3CC0006E050";
-        target->buildConfigurationList = findByUuid(configurationLists, "A932DE8F1BFCD3CC0006E050");
-        target->buildPhases.push_back(findByUuid(sourcesBuildPhases, "A932DE841BFCD3CC0006E050"));
-        target->buildPhases.push_back(findByUuid(frameworkBuildPhases, "A932DE851BFCD3CC0006E050"));
-        target->buildPhases.push_back(findByUuid(copyFilesBuildPhases, "A932DE861BFCD3CC0006E050"));
+        target->buildConfigurationList = findByUuid(xcodeProject->configurationLists, "A932DE8F1BFCD3CC0006E050");
+        target->buildPhases.push_back(findByUuid(xcodeProject->sourcesBuildPhases, "A932DE841BFCD3CC0006E050"));
+        target->buildPhases.push_back(findByUuid(xcodeProject->frameworkBuildPhases, "A932DE851BFCD3CC0006E050"));
+        target->buildPhases.push_back(findByUuid(xcodeProject->copyFilesBuildPhases, "A932DE861BFCD3CC0006E050"));
         target->name = "MyHidamari";
         target->productName = "MyHidamari";
-        target->productReference = findByUuid(pbxFileReferenceList, "A932DE881BFCD3CC0006E050");
+        target->productReference = findByUuid(xcodeProject->fileReferences, "A932DE881BFCD3CC0006E050");
         target->productType = "\"com.apple.product-type.tool\"";
-        nativeTargets.push_back(std::move(target));
+        xcodeProject->nativeTargets.push_back(std::move(target));
     }
 
-    std::vector<std::shared_ptr<PBXProject>> projects;
+    // PBXProject
     {
         auto project = std::make_shared<PBXProject>();
         project->uuid = "A932DE801BFCD3CC0006E050";
-        project->buildConfigurationList = findByUuid(configurationLists, "A932DE831BFCD3CC0006E050");
+        project->buildConfigurationList = findByUuid(xcodeProject->configurationLists, "A932DE831BFCD3CC0006E050");
         project->compatibilityVersion = "\"Xcode 3.2\"";
         project->developmentRegion = "English";
         project->hasScannedForEncodings = "0";
         project->knownRegions = {"en"};
-        project->mainGroup = findByUuid(pbxGroups, "A932DE7F1BFCD3CC0006E050");
-        project->productRefGroup = findByUuid(pbxGroups, "A932DE891BFCD3CC0006E050");
+        project->mainGroup = findByUuid(xcodeProject->groups, "A932DE7F1BFCD3CC0006E050");
+        project->productRefGroup = findByUuid(xcodeProject->groups, "A932DE891BFCD3CC0006E050");
         project->projectDirPath = "\"\"";
         project->projectRoot = "\"\"";
-        project->targets.push_back(findByUuid(nativeTargets, "A932DE871BFCD3CC0006E050"));
+        project->targets.push_back(findByUuid(xcodeProject->nativeTargets, "A932DE871BFCD3CC0006E050"));
 
         project->addAttribute("LastUpgradeCheck", "0710");
         project->addAttribute("ORGANIZATIONNAME", "mogemimi");
@@ -704,16 +721,20 @@ void printObjects(XcodePrinter & printer)
         std::vector<XcodeTargetAttribute> targetAttributes;
         {
             XcodeTargetAttribute attribute;
-            attribute.target = findByUuid(nativeTargets, "A932DE871BFCD3CC0006E050");
+            attribute.target = findByUuid(xcodeProject->nativeTargets, "A932DE871BFCD3CC0006E050");
             attribute.CreatedOnToolsVersion = "7.1.1";
             targetAttributes.push_back(std::move(attribute));
         }
         project->addAttribute("TargetAttributes", std::move(targetAttributes));
 
-        projects.push_back(std::move(project));
+        xcodeProject->projects.push_back(std::move(project));
     }
 
-    std::sort(std::begin(pbxGroups), std::end(pbxGroups),
+    xcodeProject->archiveVersion = "1";
+    xcodeProject->objectVersion = "46";
+    xcodeProject->rootObject = findByUuid(xcodeProject->projects, "A932DE801BFCD3CC0006E050");
+
+    std::sort(std::begin(xcodeProject->groups), std::end(xcodeProject->groups),
         [](const std::shared_ptr<PBXGroup>& a, const std::shared_ptr<PBXGroup>& b) {
             auto cost = [](const PBXGroup& group) {
                 int c = 0;
@@ -730,12 +751,15 @@ void printObjects(XcodePrinter & printer)
             return cost(*a) >= cost(*b);
         });
 
-#endif // ayafuya rocket~~~~~~~
+    return std::move(xcodeProject);
+}
 
+void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
+{
     constexpr bool isSingleLine = true;
 
     printer.beginSection("PBXBuildFile");
-    for (auto & phase : sourcesBuildPhases) {
+    for (auto & phase : xcodeProject.sourcesBuildPhases) {
         for (auto & f : phase->files) {
             auto & buildFile = *f;
             printer.beginKeyValue(buildFile.uuid + " " + encodeComment(buildFile.fileRef->path + " in " + phase->comments()));
@@ -749,7 +773,7 @@ void printObjects(XcodePrinter & printer)
     printer.endSection();
 
     printer.beginSection("PBXCopyFilesBuildPhase");
-    for (auto & phase : copyFilesBuildPhases) {
+    for (auto & phase : xcodeProject.copyFilesBuildPhases) {
         printer.beginKeyValue(phase->uuid + " " + encodeComment(phase->comments()));
             printer.beginObject();
             printer.printKeyValue("isa", phase->isa());
@@ -764,7 +788,7 @@ void printObjects(XcodePrinter & printer)
     printer.endSection();
 
     printer.beginSection("PBXFileReference");
-    for (auto & f : pbxFileReferenceList) {
+    for (auto & f : xcodeProject.fileReferences) {
         auto & fileRef = *f;
         printer.beginKeyValue(fileRef.uuid + " " + encodeComment(fileRef.path));
             printer.beginObject(isSingleLine);
@@ -786,7 +810,7 @@ void printObjects(XcodePrinter & printer)
     printer.endSection();
 
     printer.beginSection("PBXFrameworksBuildPhase");
-    for (auto & phase : frameworkBuildPhases) {
+    for (auto & phase : xcodeProject.frameworkBuildPhases) {
         printer.beginKeyValue(phase->getUuid() + " " + encodeComment(phase->comments()));
             printer.beginObject();
                 printer.printKeyValue("isa", phase->isa());
@@ -799,7 +823,7 @@ void printObjects(XcodePrinter & printer)
     printer.endSection();
 
     printer.beginSection("PBXGroup");
-    for (auto & group : pbxGroups) {
+    for (auto & group : xcodeProject.groups) {
         printer.beginKeyValue(group->getUuidWithComment());
             printer.beginObject();
                 printer.printKeyValue("isa", group->isa());
@@ -817,7 +841,7 @@ void printObjects(XcodePrinter & printer)
     printer.endSection();
 
     printer.beginSection("PBXNativeTarget");
-    for (auto & target : nativeTargets) {
+    for (auto & target : xcodeProject.nativeTargets) {
         printer.beginKeyValue(target->uuid + " " + encodeComment(target->name));
             printer.beginObject();
                 printer.printKeyValue("isa", target->isa());
@@ -839,7 +863,7 @@ void printObjects(XcodePrinter & printer)
     printer.endSection();
 
     printer.beginSection("PBXProject");
-    for (auto & project : projects) {
+    for (auto & project : xcodeProject.projects) {
         printer.beginKeyValue(project->uuid + " " + encodeComment("Project object"));
             printer.beginObject();
                 printer.printKeyValue("isa", project->isa());
@@ -896,7 +920,7 @@ void printObjects(XcodePrinter & printer)
     printer.endSection();
 
     printer.beginSection("PBXSourcesBuildPhase");
-    for (auto & phase : sourcesBuildPhases) {
+    for (auto & phase : xcodeProject.sourcesBuildPhases) {
         printer.beginKeyValue(phase->uuid + " " + encodeComment(phase->comments()));
             printer.beginObject();
                 printer.printKeyValue("isa", phase->isa());
@@ -909,7 +933,7 @@ void printObjects(XcodePrinter & printer)
     printer.endSection();
 
     printer.beginSection("XCBuildConfiguration");
-    for (auto & config : buildConfigurations) {
+    for (auto & config : xcodeProject.buildConfigurations) {
         printer.printKeyValue(config->uuid + " " + encodeComment(config->name), [&] {
             printer.beginObject();
                 printer.printKeyValue("isa", config->isa());
@@ -923,7 +947,7 @@ void printObjects(XcodePrinter & printer)
     printer.endSection();
 
     printer.beginSection("XCConfigurationList");
-    for (auto & configurationList : configurationLists) {
+    for (auto & configurationList : xcodeProject.configurationLists) {
         printer.beginKeyValue(configurationList->uuid + " " + encodeComment("Build configuration list for PBXProject \"MyHidamari\""));
             printer.beginObject();
                 printer.printKeyValue("isa", configurationList->isa());
@@ -938,7 +962,7 @@ void printObjects(XcodePrinter & printer)
     printer.endSection();
 }
 
-std::string generatePbxproj()
+std::string generatePbxproj(const XcodeProject& xcodeProject)
 {
     using StringHelper::format;
 
@@ -947,18 +971,18 @@ std::string generatePbxproj()
 
     XcodePrinter printer(stream);
     printer.beginObject();
-        printer.printKeyValue("archiveVersion", "1");
+        printer.printKeyValue("archiveVersion", xcodeProject.archiveVersion);
         printer.beginKeyValue("classes");
             printer.beginObject();
             printer.endObject();
         printer.endKeyValue();
-        printer.printKeyValue("objectVersion", "46");
+        printer.printKeyValue("objectVersion", xcodeProject.objectVersion);
         printer.beginKeyValue("objects");
             printer.beginObject();
-            printObjects(printer);
+            printObjects(printer, xcodeProject);
             printer.endObject();
         printer.endKeyValue();
-        printer.printKeyValue("rootObject", "A932DE801BFCD3CC0006E050 /* Project object */");
+        printer.printKeyValue("rootObject", xcodeProject.rootObject->uuid + " " + encodeComment("Project object"));
     printer.endObject();
 
     stream << "\n";
@@ -971,7 +995,8 @@ GeneratorError Xcode::generateXcodeProject(const CompileOptions& options)
 {
     namespace FileSystem = somera::FileSystem;
 
-    const auto xcodeprojPath = options.outputPath + ".xcodeproj";
+    const auto xcodeprojPath = FileSystem::join(
+        options.generatorOutputDirectory, options.outputFileName + ".xcodeproj");
 
     if (FileSystem::exists(xcodeprojPath)) {
         if (!FileSystem::isDirectory(xcodeprojPath)) {
@@ -987,13 +1012,14 @@ GeneratorError Xcode::generateXcodeProject(const CompileOptions& options)
         FileSystem::createDirectories(xcworkspacePath);
     }
 
+    auto xcodeProject = createXcodeProject();
     {
         const auto pbxprojPath = FileSystem::join(xcodeprojPath, "project.pbxproj");
         std::ofstream stream(pbxprojPath);
         if (!stream) {
             return GeneratorError("Error: Cannot open.");
         }
-        stream << generatePbxproj();
+        stream << generatePbxproj(*xcodeProject);
     }
     {
         const auto pbxprojPath = FileSystem::join(xcworkspacePath, "contents.xcworkspacedata");

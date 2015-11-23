@@ -25,7 +25,8 @@ struct GeneratorError {
 namespace Xcode {
 
 struct CompileOptions {
-    std::string outputPath;
+    std::string generatorOutputDirectory;
+    std::string outputFileName;
     std::vector<std::string> sources;
     std::vector<std::string> libraries;
     std::vector<std::string> includeSearchPaths;
