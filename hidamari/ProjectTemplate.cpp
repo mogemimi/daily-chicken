@@ -70,6 +70,11 @@ std::string encodeComment(const std::string& comment)
     return "/* " + comment + " */";
 }
 
+std::string encodeDoubleQuotes(const std::string& comment)
+{
+    return '\"' + comment + '\"';
+}
+
 struct XcodeObject {
     virtual ~XcodeObject() = default;
     virtual std::string getUuid() const noexcept = 0;
@@ -79,6 +84,13 @@ struct XcodeObject {
 struct XcodeBuildPhase : public XcodeObject {
     virtual ~XcodeBuildPhase() = default;
     virtual std::string comments() const noexcept = 0;
+};
+
+struct XcodeTargetAttribute final {
+    std::shared_ptr<PBXNativeTarget> target;
+    Optional<std::string> CreatedOnToolsVersion;
+    Optional<std::string> DevelopmentTeam;
+    Optional<std::string> TestTargetID;
 };
 
 struct XcodeProject final {
@@ -167,8 +179,40 @@ struct PBXNativeTarget final : public XcodeObject {
     }
 };
 
-struct PBXProject final {
-    std::string isa() const noexcept { return "PBXProject"; }
+struct PBXProject final : public XcodeObject {
+    std::string isa() const noexcept override { return "PBXProject"; }
+    std::string getUuid() const noexcept override { return uuid; }
+    std::string uuid;
+    std::map<std::string, Any> attributes;
+    std::shared_ptr<XCConfigurationList> buildConfigurationList;
+    std::string compatibilityVersion;
+    std::string developmentRegion;
+    std::string hasScannedForEncodings;
+    std::vector<std::string> knownRegions;
+    std::shared_ptr<PBXGroup> mainGroup;
+    std::shared_ptr<PBXGroup> productRefGroup;
+    std::string projectDirPath;
+    std::string projectRoot;
+    std::vector<std::shared_ptr<PBXNativeTarget>> targets;
+
+    std::vector<std::string> getTargetsString() const
+    {
+        std::vector<std::string> result;
+        for (auto & target : targets) {
+            result.push_back(target->getUuid() + " " + encodeComment(target->name));
+        }
+        return std::move(result);
+    }
+
+    void addAttribute(const std::string& key, const std::string& value)
+    {
+        attributes.emplace(key, value);
+    }
+
+    void addAttribute(const std::string& key, std::vector<XcodeTargetAttribute> && value)
+    {
+        attributes.emplace(key, std::move(value));
+    }
 };
 
 struct PBXCopyFilesBuildPhase final : public XcodeBuildPhase {
@@ -636,6 +680,37 @@ void printObjects(XcodePrinter & printer)
         target->productName = "MyHidamari";
         target->productReference = findByUuid(pbxFileReferenceList, "A932DE881BFCD3CC0006E050");
         target->productType = "\"com.apple.product-type.tool\"";
+        nativeTargets.push_back(std::move(target));
+    }
+
+    std::vector<std::shared_ptr<PBXProject>> projects;
+    {
+        auto project = std::make_shared<PBXProject>();
+        project->uuid = "A932DE801BFCD3CC0006E050";
+        project->buildConfigurationList = findByUuid(configurationLists, "A932DE831BFCD3CC0006E050");
+        project->compatibilityVersion = "\"Xcode 3.2\"";
+        project->developmentRegion = "English";
+        project->hasScannedForEncodings = "0";
+        project->knownRegions = {"en"};
+        project->mainGroup = findByUuid(pbxGroups, "A932DE7F1BFCD3CC0006E050");
+        project->productRefGroup = findByUuid(pbxGroups, "A932DE891BFCD3CC0006E050");
+        project->projectDirPath = "\"\"";
+        project->projectRoot = "\"\"";
+        project->targets.push_back(findByUuid(nativeTargets, "A932DE871BFCD3CC0006E050"));
+
+        project->addAttribute("LastUpgradeCheck", "0710");
+        project->addAttribute("ORGANIZATIONNAME", "mogemimi");
+
+        std::vector<XcodeTargetAttribute> targetAttributes;
+        {
+            XcodeTargetAttribute attribute;
+            attribute.target = findByUuid(nativeTargets, "A932DE871BFCD3CC0006E050");
+            attribute.CreatedOnToolsVersion = "7.1.1";
+            targetAttributes.push_back(std::move(attribute));
+        }
+        project->addAttribute("TargetAttributes", std::move(targetAttributes));
+
+        projects.push_back(std::move(project));
     }
 
     std::sort(std::begin(pbxGroups), std::end(pbxGroups),
@@ -764,38 +839,60 @@ void printObjects(XcodePrinter & printer)
     printer.endSection();
 
     printer.beginSection("PBXProject");
-        printer.beginKeyValue("A932DE801BFCD3CC0006E050 /* Project object */");
+    for (auto & project : projects) {
+        printer.beginKeyValue(project->uuid + " " + encodeComment("Project object"));
             printer.beginObject();
-                printer.printKeyValue("isa", "PBXProject");
-                printer.beginKeyValue("attributes");
+                printer.printKeyValue("isa", project->isa());
+                printer.printKeyValue("attributes", [&] {
                     printer.beginObject();
-                        printer.printKeyValue("LastUpgradeCheck", "0710");
-                        printer.printKeyValue("ORGANIZATIONNAME", "mogemimi");
-                        printer.beginKeyValue("TargetAttributes");
-                            printer.beginObject();
-                                printer.beginKeyValue("A932DE871BFCD3CC0006E050");
-                                    printer.beginObject();
-                                        printer.printKeyValue("CreatedOnToolsVersion", "7.1.1");
-                                    printer.endObject();
-                                printer.endKeyValue();
-                            printer.endObject();
-                        printer.endKeyValue();
+                    for (auto & pair : project->attributes) {
+                        if (pair.second.is<std::string>()) {
+                            printer.printKeyValue(pair.first, pair.second.as<std::string>());
+                        }
+                        else if (pair.second.is<std::vector<XcodeTargetAttribute>>()) {
+                            auto & targetAttributes = pair.second.as<std::vector<XcodeTargetAttribute>>();
+                            printer.printKeyValue(pair.first, [&] {
+                                printer.beginObject();
+                                for (auto & targetAttribute : targetAttributes) {
+                                    printer.beginKeyValue(targetAttribute.target->uuid);
+                                        printer.beginObject();
+                                            if (targetAttribute.CreatedOnToolsVersion) {
+                                                printer.printKeyValue("CreatedOnToolsVersion",
+                                                    *targetAttribute.CreatedOnToolsVersion);
+                                            }
+                                            if (targetAttribute.DevelopmentTeam) {
+                                                printer.printKeyValue("DevelopmentTeam",
+                                                    *targetAttribute.DevelopmentTeam);
+                                            }
+                                            if (targetAttribute.TestTargetID) {
+                                                printer.printKeyValue("TestTargetID",
+                                                    *targetAttribute.TestTargetID);
+                                            }
+                                        printer.endObject();
+                                    printer.endKeyValue();
+                                }
+                                printer.endObject();
+                            });
+                        }
+                    }
                     printer.endObject();
-                printer.endKeyValue();
-                printer.printKeyValue("buildConfigurationList", "A932DE831BFCD3CC0006E050 /* Build configuration list for PBXProject \"MyHidamari\" */");
-                printer.printKeyValue("compatibilityVersion", "\"Xcode 3.2\"");
-                printer.printKeyValue("developmentRegion", "English");
-                printer.printKeyValue("hasScannedForEncodings", "0");
-                printer.printKeyValue("knownRegions", std::vector<std::string>{"en"});
-                printer.printKeyValue("mainGroup", "A932DE7F1BFCD3CC0006E050");
-                printer.printKeyValue("productRefGroup", "A932DE891BFCD3CC0006E050 /* Products */");
-                printer.printKeyValue("projectDirPath", "\"\"");
-                printer.printKeyValue("projectRoot", "\"\"");
-                printer.printKeyValue("targets", std::vector<std::string>{
-                    "A932DE871BFCD3CC0006E050 /* MyHidamari */",
                 });
+                printer.printKeyValue("buildConfigurationList",
+                    project->buildConfigurationList->uuid
+                    + " "
+                    + encodeComment("Build configuration list for PBXProject " + encodeDoubleQuotes("MyHidamari")));
+                printer.printKeyValue("compatibilityVersion", project->compatibilityVersion);
+                printer.printKeyValue("developmentRegion", project->developmentRegion);
+                printer.printKeyValue("hasScannedForEncodings", project->hasScannedForEncodings);
+                printer.printKeyValue("knownRegions", project->knownRegions);
+                printer.printKeyValue("mainGroup", project->mainGroup->uuid);
+                printer.printKeyValue("productRefGroup", project->productRefGroup->uuid + " " + encodeComment("Products"));
+                printer.printKeyValue("projectDirPath", project->projectDirPath);
+                printer.printKeyValue("projectRoot", project->projectRoot);
+                printer.printKeyValue("targets", project->getTargetsString());
             printer.endObject();
         printer.endKeyValue();
+    }
     printer.endSection();
 
     printer.beginSection("PBXSourcesBuildPhase");
