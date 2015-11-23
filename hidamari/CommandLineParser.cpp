@@ -27,21 +27,34 @@ void CommandLineParser::addArgument(
 
 std::string CommandLineParser::getHelpText() const
 {
+    constexpr auto indent = "  ";
     const std::string spaces = "                        ";
     std::stringstream stream;
     for (auto & hint : hints) {
-        stream << "  ";
+        stream << indent;
         auto option = hint.name;
         if (hint.type == CommandLineArgumentType::JoinedOrSeparate) {
             option += " <value>";
         }
+
+        bool needToIndent = false;
         stream << option;
         if (option.size() < spaces.size()) {
             stream << spaces.substr(option.size());
         } else {
-            stream << '\n' << spaces;
+            stream << '\n';
+            needToIndent = true;
         }
-        stream << hint.help << '\n';
+
+        std::stringstream helpStream(hint.help);
+        std::string helpLine;
+        while (std::getline(helpStream, helpLine)) {
+            if (needToIndent) {
+                stream << indent << spaces;
+            }
+            stream << helpLine << '\n';
+            needToIndent = true;
+        }
     }
     return stream.str();
 }

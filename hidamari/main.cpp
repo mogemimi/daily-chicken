@@ -28,8 +28,8 @@ void setupCommandLineParser(CommandLineParser & parser)
     parser.addArgument("-fno-exceptions", CommandLineArgumentType::Flag,
         "no-exceptions");
     parser.addArgument("-generator=", CommandLineArgumentType::JoinedOrSeparate,
-        "Generate project for the project file format "
-        "(xcode, msbuild, cmake or gyp)");
+        "The output formats to generate. Supported format\n"
+        "are \"xcode\", \"msbuild\", \"cmake\", \"gyp\", or \"gn\".");
     parser.addArgument("-o", CommandLineArgumentType::JoinedOrSeparate,
         "Write output to <file>");
     parser.addArgument("-generator-output=", CommandLineArgumentType::JoinedOrSeparate,
