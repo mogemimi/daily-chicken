@@ -562,7 +562,7 @@ std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& op
                 continue;
             }
             auto file = std::make_shared<PBXBuildFile>();
-            file->uuid = "A932DE8C1BFCD3CC0006E050";
+            file->uuid = generateXcodeID();
             file->fileRef = findByPath(xcodeProject->fileReferences, source);
             phase->files.push_back(std::move(file));
         }

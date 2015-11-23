@@ -1,6 +1,7 @@
 // Copyright (c) 2015 mogemimi. Distributed under the MIT license.
 
 #include "CommandLineParser.h"
+#include "FileSystem.h"
 #include "ProjectTemplate.h"
 #include "StringHelper.h"
 #include "SubprocessHelper.h"
@@ -11,6 +12,7 @@
 
 using somera::CommandLineParser;
 using somera::CommandLineArgumentType;
+namespace FileSystem = somera::FileSystem;
 
 namespace somera {
 
@@ -111,6 +113,13 @@ int main(int argc, char *argv[])
         options.outputFileName = path;
         break;
     }
+    options.author = somera::SubprocessHelper::call("git config user.name");
+
+    for (auto & path : options.sources) {
+        path = FileSystem::relative(path, options.generatorOutputDirectory);
+        std::cout << "[Path (Relative)] " << path << std::endl;
+    }
+
     for (auto & path : parser.getValues("-generator=")) {
         if (path == "xcode") {
             auto error = somera::Xcode::generateXcodeProject(options);
@@ -122,8 +131,6 @@ int main(int argc, char *argv[])
         }
         break;
     }
-
-    options.author = somera::SubprocessHelper::call("git config user.name");
 
     return 0;
 }
