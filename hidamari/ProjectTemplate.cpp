@@ -488,6 +488,42 @@ void printObject(XcodePrinter & printer, const std::map<std::string, Any>& objec
     printer.endObject();
 }
 
+std::string findLastKnownFileType(const std::string& path) noexcept
+{
+    auto ext = std::get<1>(FileSystem::splitExtension(path));
+    if (ext == "cpp" || ext == "cxx" || ext == "cc") {
+        return "sourcecode.cpp.cpp";
+    }
+    if (ext == "ii") {
+        return "sourcecode.cpp.cpp.preprocessed";
+    }
+    if (ext == "hpp" || ext == "hxx" || ext == "hh") {
+        return "sourcecode.cpp.h";
+    }
+    if (ext == "mm") {
+        return "sourcecode.cpp.objcpp";
+    }
+    if (ext == "m") {
+        return "sourcecode.c.objc";
+    }
+    if (ext == "m") {
+        return "sourcecode.c.objc";
+    }
+    if (ext == "c") {
+        return "sourcecode.c";
+    }
+    if (ext == "i") {
+        return "sourcecode.c.c.preprocessed";
+    }
+    if (ext == "h") {
+        return "sourcecode.c.h";
+    }
+    if (ext == "sourcecode.swift") {
+        return "sourcecode.c.h";
+    }
+    return "sourcecode";
+}
+
 std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& options)
 {
     auto xcodeProject = std::make_shared<XcodeProject>();
@@ -505,15 +541,7 @@ std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& op
     {
         auto f = std::make_shared<PBXFileReference>();
         f->uuid = "A932DE8B1BFCD3CC0006E050";
-        f->lastKnownFileType = [](const std::string& path) {
-            auto ext = std::get<1>(FileSystem::splitExtension(path));
-            if (ext == "cpp"
-                || ext == "cxx"
-                || ext == "cc") {
-                return "sourcecode.cpp.cpp";
-            }
-            return "sourcecode.c.h";
-        }("main.cpp");
+        f->lastKnownFileType = findLastKnownFileType("main.cpp");
         f->path = "main.cpp";
         f->sourceTree = "\"<group>\"";
         xcodeProject->fileReferences.push_back(std::move(f));
@@ -774,10 +802,14 @@ void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
     for (auto & phase : xcodeProject.sourcesBuildPhases) {
         for (auto & f : phase->files) {
             auto & buildFile = *f;
-            printer.beginKeyValue(buildFile.uuid + " " + encodeComment(buildFile.fileRef->path + " in " + phase->comments()));
+            printer.beginKeyValue(
+                buildFile.uuid
+                + " "
+                + encodeComment(buildFile.fileRef->path + " in " + phase->comments()));
                 printer.beginObject(isSingleLine);
                 printer.printKeyValue("isa", buildFile.isa());
-                printer.printKeyValue("fileRef", buildFile.fileRef->uuid + " " + encodeComment(buildFile.fileRef->path));
+                printer.printKeyValue("fileRef",
+                    buildFile.fileRef->uuid + " " + encodeComment(buildFile.fileRef->path));
                 printer.endObject();
             printer.endKeyValue();
         }
@@ -793,7 +825,8 @@ void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
             printer.printKeyValue("dstPath", phase->dstPath);
             printer.printKeyValue("dstSubfolderSpec", phase->dstSubfolderSpec);
             printer.printKeyValue("files", phase->files);
-            printer.printKeyValue("runOnlyForDeploymentPostprocessing", phase->runOnlyForDeploymentPostprocessing);
+            printer.printKeyValue("runOnlyForDeploymentPostprocessing",
+                phase->runOnlyForDeploymentPostprocessing);
             printer.endObject();
         printer.endKeyValue();
     }
@@ -828,7 +861,8 @@ void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
                 printer.printKeyValue("isa", phase->isa());
                 printer.printKeyValue("buildActionMask", phase->buildActionMask);
                 printer.printKeyValue("files", phase->files);
-                printer.printKeyValue("runOnlyForDeploymentPostprocessing", phase->runOnlyForDeploymentPostprocessing);
+                printer.printKeyValue("runOnlyForDeploymentPostprocessing",
+                    phase->runOnlyForDeploymentPostprocessing);
             printer.endObject();
         printer.endKeyValue();
     }
@@ -923,7 +957,8 @@ void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
                 printer.printKeyValue("hasScannedForEncodings", project->hasScannedForEncodings);
                 printer.printKeyValue("knownRegions", project->knownRegions);
                 printer.printKeyValue("mainGroup", project->mainGroup->uuid);
-                printer.printKeyValue("productRefGroup", project->productRefGroup->uuid + " " + encodeComment("Products"));
+                printer.printKeyValue("productRefGroup",
+                    project->productRefGroup->uuid + " " + encodeComment("Products"));
                 printer.printKeyValue("projectDirPath", project->projectDirPath);
                 printer.printKeyValue("projectRoot", project->projectRoot);
                 printer.printKeyValue("targets", project->getTargetsString());
@@ -939,7 +974,8 @@ void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
                 printer.printKeyValue("isa", phase->isa());
                 printer.printKeyValue("buildActionMask", phase->buildActionMask);
                 printer.printKeyValue("files", phase->getFileListString());
-                printer.printKeyValue("runOnlyForDeploymentPostprocessing", phase->runOnlyForDeploymentPostprocessing);
+                printer.printKeyValue("runOnlyForDeploymentPostprocessing",
+                    phase->runOnlyForDeploymentPostprocessing);
             printer.endObject();
         printer.endKeyValue();
     }
@@ -968,10 +1004,13 @@ void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
             + encodeDoubleQuotes(xcodeProject.name)));
             printer.beginObject();
                 printer.printKeyValue("isa", configurationList->isa());
-                printer.printKeyValue("buildConfigurations", configurationList->getBuildConfigurationsString());
-                printer.printKeyValue("defaultConfigurationIsVisible", configurationList->defaultConfigurationIsVisible);
+                printer.printKeyValue("buildConfigurations",
+                    configurationList->getBuildConfigurationsString());
+                printer.printKeyValue("defaultConfigurationIsVisible",
+                    configurationList->defaultConfigurationIsVisible);
                 if (configurationList->defaultConfigurationName) {
-                    printer.printKeyValue("defaultConfigurationName", *configurationList->defaultConfigurationName);
+                    printer.printKeyValue("defaultConfigurationName",
+                        *configurationList->defaultConfigurationName);
                 }
             printer.endObject();
         printer.endKeyValue();
@@ -999,7 +1038,8 @@ std::string generatePbxproj(const XcodeProject& xcodeProject)
             printObjects(printer, xcodeProject);
             printer.endObject();
         printer.endKeyValue();
-        printer.printKeyValue("rootObject", xcodeProject.rootObject->uuid + " " + encodeComment("Project object"));
+        printer.printKeyValue("rootObject",
+            xcodeProject.rootObject->uuid + " " + encodeComment("Project object"));
     printer.endObject();
 
     stream << "\n";
