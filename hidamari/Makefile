@@ -14,6 +14,7 @@ bootstrap:
 		-I../somerachan/src \
 		$(SOURCES) \
 		main.cpp
+	@mkdir -p ../bin
 	@mv hidamari ../bin/
 
 xcode:
@@ -26,6 +27,7 @@ xcode:
 		$(SOURCES) \
 		main.cpp
 	@xcodebuild -project hidamari.xcodeproj -configuration Release
+	@mkdir -p ../bin
 	@cp build/Release/hidamari ../bin/hidamari
 
 test:
@@ -41,5 +43,5 @@ test:
 	@xcodebuild -project HidamariTest.xcodeproj -configuration Release
 	./build/Release/HidamariTest
 
-hidamari:
+sketch:
 	@open http://ch.nicovideo.jp/hidamari_01
