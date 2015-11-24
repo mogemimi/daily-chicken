@@ -83,8 +83,10 @@ struct Noncopyable {
 
 struct XcodeObject : Noncopyable {
     virtual ~XcodeObject() = default;
-    virtual std::string getUuid() const noexcept = 0;
     virtual std::string isa() const noexcept = 0;
+
+    std::string const uuid;
+    XcodeObject() : uuid(generateXcodeID()) {}
 };
 
 struct XcodeBuildPhase : public XcodeObject {
@@ -120,15 +122,11 @@ struct XcodeProject final : Noncopyable {
 
 struct PBXBuildFile final : public XcodeObject {
     std::string isa() const noexcept override { return "PBXBuildFile"; }
-    std::string getUuid() const noexcept override { return uuid; }
-    std::string uuid;
     std::shared_ptr<PBXFileReference> fileRef;
 };
 
 struct PBXFileReference final : public XcodeObject {
     std::string isa() const noexcept override { return "PBXFileReference"; }
-    std::string getUuid() const noexcept override { return uuid; }
-    std::string uuid;
     Optional<std::string> explicitFileType;
     Optional<std::string> includeInIndex;
     Optional<std::string> lastKnownFileType;
@@ -138,8 +136,6 @@ struct PBXFileReference final : public XcodeObject {
 
 struct PBXGroup final : public XcodeObject {
     std::string isa() const noexcept override { return "PBXGroup"; }
-    std::string getUuid() const noexcept override { return uuid; }
-    std::string uuid;
     std::vector<std::shared_ptr<XcodeObject>> children;
 
     Optional<std::string> name;
@@ -179,9 +175,6 @@ struct PBXGroup final : public XcodeObject {
 
 struct PBXNativeTarget final : public XcodeObject {
     std::string isa() const noexcept override { return "PBXNativeTarget"; }
-    std::string getUuid() const noexcept override { return uuid; }
-
-    std::string uuid;
     std::shared_ptr<XCConfigurationList> buildConfigurationList;
     std::vector<std::shared_ptr<XcodeBuildPhase>> buildPhases;
     std::vector<std::string> buildRules;
@@ -195,7 +188,7 @@ struct PBXNativeTarget final : public XcodeObject {
     {
         std::vector<std::string> result;
         for (auto & phase : buildPhases) {
-            result.push_back(phase->getUuid() + " " + encodeComment(phase->comments()));
+            result.push_back(phase->uuid + " " + encodeComment(phase->comments()));
         }
         return std::move(result);
     }
@@ -203,8 +196,6 @@ struct PBXNativeTarget final : public XcodeObject {
 
 struct PBXProject final : public XcodeObject {
     std::string isa() const noexcept override { return "PBXProject"; }
-    std::string getUuid() const noexcept override { return uuid; }
-    std::string uuid;
     std::map<std::string, Any> attributes;
     std::shared_ptr<XCConfigurationList> buildConfigurationList;
     std::string compatibilityVersion;
@@ -221,7 +212,7 @@ struct PBXProject final : public XcodeObject {
     {
         std::vector<std::string> result;
         for (auto & target : targets) {
-            result.push_back(target->getUuid() + " " + encodeComment(target->name));
+            result.push_back(target->uuid + " " + encodeComment(target->name));
         }
         return std::move(result);
     }
@@ -239,8 +230,6 @@ struct PBXProject final : public XcodeObject {
 
 struct PBXCopyFilesBuildPhase final : public XcodeBuildPhase {
     std::string isa() const noexcept override { return "PBXCopyFilesBuildPhase"; }
-    std::string getUuid() const noexcept override { return uuid; }
-    std::string uuid;
     std::string buildActionMask;
     std::string dstPath;
     std::string dstSubfolderSpec;
@@ -252,8 +241,6 @@ struct PBXCopyFilesBuildPhase final : public XcodeBuildPhase {
 
 struct PBXFrameworksBuildPhase final : public XcodeBuildPhase {
     std::string isa() const noexcept override { return "PBXFrameworksBuildPhase"; }
-    std::string getUuid() const noexcept override { return uuid; }
-    std::string uuid;
     std::string buildActionMask;
     std::vector<std::string> files;
     std::string runOnlyForDeploymentPostprocessing;
@@ -263,8 +250,6 @@ struct PBXFrameworksBuildPhase final : public XcodeBuildPhase {
 
 struct PBXSourcesBuildPhase final : public XcodeBuildPhase {
     std::string isa() const noexcept override { return "PBXSourcesBuildPhase"; }
-    std::string getUuid() const noexcept override { return uuid; }
-    std::string uuid;
     std::string buildActionMask;
     std::vector<std::shared_ptr<PBXBuildFile>> files;
     std::string runOnlyForDeploymentPostprocessing;
@@ -275,7 +260,9 @@ struct PBXSourcesBuildPhase final : public XcodeBuildPhase {
     {
         std::vector<std::string> result;
         for (auto & buildFile : files) {
-            result.push_back(buildFile->uuid + " " + encodeComment(buildFile->fileRef->path + " in " + comments()));
+            result.push_back(buildFile->uuid
+                + " "
+                + encodeComment(buildFile->fileRef->path + " in " + comments()));
         }
         return std::move(result);
     }
@@ -283,8 +270,6 @@ struct PBXSourcesBuildPhase final : public XcodeBuildPhase {
 
 struct XCBuildConfiguration final : public XcodeObject {
     std::string isa() const noexcept override { return "XCBuildConfiguration"; }
-    std::string getUuid() const noexcept override { return uuid; }
-    std::string uuid;
     std::map<std::string, Any> buildSettings;
     std::string name;
 
@@ -301,8 +286,6 @@ struct XCBuildConfiguration final : public XcodeObject {
 
 struct XCConfigurationList final : public XcodeObject {
     std::string isa() const noexcept override { return "XCConfigurationList"; }
-    std::string getUuid() const noexcept override { return uuid; }
-    std::string uuid;
     std::vector<std::shared_ptr<XCBuildConfiguration>> buildConfigurations;
     std::string defaultConfigurationIsVisible;
     Optional<std::string> defaultConfigurationName;
@@ -447,30 +430,6 @@ public:
     }
 };
 
-template <typename Container, typename Func>
-auto findIf(Container & c, Func f)
-{
-    auto iter = std::find_if(std::begin(c), std::end(c), f);
-    assert(iter != std::end(c));
-    return *iter;
-}
-
-template <typename Container>
-auto findByPath(Container & c, const std::string& path)
-{
-    return findIf(c, [&](const typename Container::value_type& v) {
-        return v->path == path;
-    });
-}
-
-template <typename Container>
-auto findByUuid(Container & c, const std::string& uuid)
-{
-    return findIf(c, [&](const typename Container::value_type& v) {
-        return v->uuid == uuid;
-    });
-}
-
 void printObject(XcodePrinter & printer, const std::map<std::string, Any>& object)
 {
     ///@todo sorting by key [A-Z]
@@ -529,239 +488,205 @@ bool isHeaderFile(const std::string& path) noexcept
 
 std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& options)
 {
-    auto xcodeProject = std::make_shared<XcodeProject>();
+    const auto sourceGroup = [&] {
+        auto group = std::make_shared<PBXGroup>();
+        group->name = "Source";
+        return std::move(group);
+    }();
+    const auto productsGroup = [&] {
+        auto group = std::make_shared<PBXGroup>();
+        group->name = "Products";
+        return std::move(group);
+    }();
+    const auto mainGroup = [&] {
+        auto group = std::make_shared<PBXGroup>();
+        group->children.push_back(sourceGroup);
+        group->children.push_back(productsGroup);
+        return std::move(group);
+    }();
 
-    // PBXFileReference
-    {
-        auto f = std::make_shared<PBXFileReference>();
-        f->uuid = "A932DE881BFCD3CC0006E050";
-        f->explicitFileType = "\"compiled.mach-o.executable\"";
-        f->includeInIndex = "0";
-        f->path = options.productName;
-        f->sourceTree = "BUILT_PRODUCTS_DIR";
-        xcodeProject->fileReferences.push_back(std::move(f));
-    }
+    const auto productReference = [&] {
+        auto fileRef = std::make_shared<PBXFileReference>();
+        fileRef->explicitFileType = "\"compiled.mach-o.executable\"";
+        fileRef->includeInIndex = "0";
+        fileRef->path = options.productName;
+        fileRef->sourceTree = "BUILT_PRODUCTS_DIR";
+        productsGroup->children.push_back(fileRef);
+        return std::move(fileRef);
+    }();
 
     for (auto & source : options.sources) {
-        auto f = std::make_shared<PBXFileReference>();
-        f->uuid = generateXcodeID();
-        f->lastKnownFileType = findLastKnownFileType(source);
-        f->path = source;
-        f->sourceTree = "\"<group>\"";
-        xcodeProject->fileReferences.push_back(std::move(f));
+        auto fileRef = std::make_shared<PBXFileReference>();
+        fileRef->lastKnownFileType = findLastKnownFileType(source);
+        fileRef->path = source;
+        fileRef->sourceTree = "\"<group>\"";
+        sourceGroup->children.push_back(fileRef);
     }
 
-    // PBXSourcesBuildPhase
-    {
-        auto phase = std::make_shared<PBXSourcesBuildPhase>();
-        phase->uuid = "A932DE841BFCD3CC0006E050";
-        phase->buildActionMask = "2147483647";
-        phase->runOnlyForDeploymentPostprocessing = "0";
-        for (auto & source : options.sources) {
-            if (isHeaderFile(source)) {
-                continue;
-            }
-            auto file = std::make_shared<PBXBuildFile>();
-            file->uuid = generateXcodeID();
-            file->fileRef = findByPath(xcodeProject->fileReferences, source);
-            phase->files.push_back(std::move(file));
-        }
-        xcodeProject->sourcesBuildPhases.push_back(std::move(phase));
-    }
-
-    // XCBuildConfiguration
-    {
-        auto buildConfiguration = std::make_shared<XCBuildConfiguration>();
-        auto & config = *buildConfiguration;
-        config.uuid = "A932DE8D1BFCD3CC0006E050";
-        config.name = "Debug";
-        config.addBuildSettings("ALWAYS_SEARCH_USER_PATHS", "NO");
-        config.addBuildSettings("CLANG_CXX_LANGUAGE_STANDARD", "\"gnu++0x\"");
-        config.addBuildSettings("CLANG_CXX_LIBRARY", "\"libc++\"");
-        config.addBuildSettings("CLANG_ENABLE_MODULES", "YES");
-        config.addBuildSettings("CLANG_ENABLE_OBJC_ARC", "YES");
-        config.addBuildSettings("CLANG_WARN_BOOL_CONVERSION", "YES");
-        config.addBuildSettings("CLANG_WARN_CONSTANT_CONVERSION", "YES");
-        config.addBuildSettings("CLANG_WARN_DIRECT_OBJC_ISA_USAGE", "YES_ERROR");
-        config.addBuildSettings("CLANG_WARN_EMPTY_BODY", "YES");
-        config.addBuildSettings("CLANG_WARN_ENUM_CONVERSION", "YES");
-        config.addBuildSettings("CLANG_WARN_INT_CONVERSION", "YES");
-        config.addBuildSettings("CLANG_WARN_OBJC_ROOT_CLASS", "YES_ERROR");
-        config.addBuildSettings("CLANG_WARN_UNREACHABLE_CODE", "YES");
-        config.addBuildSettings("CLANG_WARN__DUPLICATE_METHOD_MATCH", "YES");
-        config.addBuildSettings("CODE_SIGN_IDENTITY", "\"-\"");
-        config.addBuildSettings("COPY_PHASE_STRIP", "NO");
-        config.addBuildSettings("DEBUG_INFORMATION_FORMAT", "dwarf");
-        config.addBuildSettings("ENABLE_STRICT_OBJC_MSGSEND", "YES");
-        config.addBuildSettings("ENABLE_TESTABILITY", "YES");
-        config.addBuildSettings("GCC_C_LANGUAGE_STANDARD", "gnu99");
-        config.addBuildSettings("GCC_DYNAMIC_NO_PIC", "NO");
-        config.addBuildSettings("GCC_NO_COMMON_BLOCKS", "YES");
-        config.addBuildSettings("GCC_OPTIMIZATION_LEVEL", "0");
-        config.addBuildSettings("GCC_PREPROCESSOR_DEFINITIONS", std::vector<std::string>{
+    const auto buildConfigurationDebug = [&] {
+        auto config = std::make_shared<XCBuildConfiguration>();
+        config->name = "Debug";
+        config->addBuildSettings("ALWAYS_SEARCH_USER_PATHS", "NO");
+        config->addBuildSettings("CLANG_CXX_LANGUAGE_STANDARD", "\"gnu++0x\"");
+        config->addBuildSettings("CLANG_CXX_LIBRARY", "\"libc++\"");
+        config->addBuildSettings("CLANG_ENABLE_MODULES", "YES");
+        config->addBuildSettings("CLANG_ENABLE_OBJC_ARC", "YES");
+        config->addBuildSettings("CLANG_WARN_BOOL_CONVERSION", "YES");
+        config->addBuildSettings("CLANG_WARN_CONSTANT_CONVERSION", "YES");
+        config->addBuildSettings("CLANG_WARN_DIRECT_OBJC_ISA_USAGE", "YES_ERROR");
+        config->addBuildSettings("CLANG_WARN_EMPTY_BODY", "YES");
+        config->addBuildSettings("CLANG_WARN_ENUM_CONVERSION", "YES");
+        config->addBuildSettings("CLANG_WARN_INT_CONVERSION", "YES");
+        config->addBuildSettings("CLANG_WARN_OBJC_ROOT_CLASS", "YES_ERROR");
+        config->addBuildSettings("CLANG_WARN_UNREACHABLE_CODE", "YES");
+        config->addBuildSettings("CLANG_WARN__DUPLICATE_METHOD_MATCH", "YES");
+        config->addBuildSettings("CODE_SIGN_IDENTITY", "\"-\"");
+        config->addBuildSettings("COPY_PHASE_STRIP", "NO");
+        config->addBuildSettings("DEBUG_INFORMATION_FORMAT", "dwarf");
+        config->addBuildSettings("ENABLE_STRICT_OBJC_MSGSEND", "YES");
+        config->addBuildSettings("ENABLE_TESTABILITY", "YES");
+        config->addBuildSettings("GCC_C_LANGUAGE_STANDARD", "gnu99");
+        config->addBuildSettings("GCC_DYNAMIC_NO_PIC", "NO");
+        config->addBuildSettings("GCC_NO_COMMON_BLOCKS", "YES");
+        config->addBuildSettings("GCC_OPTIMIZATION_LEVEL", "0");
+        config->addBuildSettings("GCC_PREPROCESSOR_DEFINITIONS", std::vector<std::string>{
             "\"DEBUG=1\"",
             "\"$(inherited)\"",
         });
-        config.addBuildSettings("GCC_WARN_64_TO_32_BIT_CONVERSION", "YES");
-        config.addBuildSettings("GCC_WARN_ABOUT_RETURN_TYPE", "YES_ERROR");
-        config.addBuildSettings("GCC_WARN_UNDECLARED_SELECTOR", "YES");
-        config.addBuildSettings("GCC_WARN_UNINITIALIZED_AUTOS", "YES_AGGRESSIVE");
-        config.addBuildSettings("GCC_WARN_UNUSED_FUNCTION", "YES");
-        config.addBuildSettings("GCC_WARN_UNUSED_VARIABLE", "YES");
-        config.addBuildSettings("MACOSX_DEPLOYMENT_TARGET", "10.11");
-        config.addBuildSettings("MTL_ENABLE_DEBUG_INFO", "YES");
-        config.addBuildSettings("ONLY_ACTIVE_ARCH", "YES");
-        config.addBuildSettings("SDKROOT", "macosx");
-        xcodeProject->buildConfigurations.push_back(std::move(buildConfiguration));
-    }
-    {
-        auto buildConfiguration = std::make_shared<XCBuildConfiguration>();
-        auto & config = *buildConfiguration;
-        config.uuid = "A932DE8E1BFCD3CC0006E050";
-        config.name = "Release";
-        config.addBuildSettings("ALWAYS_SEARCH_USER_PATHS", "NO");
-        config.addBuildSettings("CLANG_CXX_LANGUAGE_STANDARD", "\"gnu++0x\"");
-        config.addBuildSettings("CLANG_CXX_LIBRARY", "\"libc++\"");
-        config.addBuildSettings("CLANG_ENABLE_MODULES", "YES");
-        config.addBuildSettings("CLANG_ENABLE_OBJC_ARC", "YES");
-        config.addBuildSettings("CLANG_WARN_BOOL_CONVERSION", "YES");
-        config.addBuildSettings("CLANG_WARN_CONSTANT_CONVERSION", "YES");
-        config.addBuildSettings("CLANG_WARN_DIRECT_OBJC_ISA_USAGE", "YES_ERROR");
-        config.addBuildSettings("CLANG_WARN_EMPTY_BODY", "YES");
-        config.addBuildSettings("CLANG_WARN_ENUM_CONVERSION", "YES");
-        config.addBuildSettings("CLANG_WARN_INT_CONVERSION", "YES");
-        config.addBuildSettings("CLANG_WARN_OBJC_ROOT_CLASS", "YES_ERROR");
-        config.addBuildSettings("CLANG_WARN_UNREACHABLE_CODE", "YES");
-        config.addBuildSettings("CLANG_WARN__DUPLICATE_METHOD_MATCH", "YES");
-        config.addBuildSettings("CODE_SIGN_IDENTITY", "\"-\"");
-        config.addBuildSettings("COPY_PHASE_STRIP", "NO");
-        config.addBuildSettings("DEBUG_INFORMATION_FORMAT", "\"dwarf-with-dsym\"");
-        config.addBuildSettings("ENABLE_NS_ASSERTIONS", "NO");
-        config.addBuildSettings("ENABLE_STRICT_OBJC_MSGSEND", "YES");
-        config.addBuildSettings("GCC_C_LANGUAGE_STANDARD", "gnu99");
-        config.addBuildSettings("GCC_NO_COMMON_BLOCKS", "YES");
-        config.addBuildSettings("GCC_WARN_64_TO_32_BIT_CONVERSION", "YES");
-        config.addBuildSettings("GCC_WARN_ABOUT_RETURN_TYPE", "YES_ERROR");
-        config.addBuildSettings("GCC_WARN_UNDECLARED_SELECTOR", "YES");
-        config.addBuildSettings("GCC_WARN_UNINITIALIZED_AUTOS", "YES_AGGRESSIVE");
-        config.addBuildSettings("GCC_WARN_UNUSED_FUNCTION", "YES");
-        config.addBuildSettings("GCC_WARN_UNUSED_VARIABLE", "YES");
-        config.addBuildSettings("MACOSX_DEPLOYMENT_TARGET", "10.11");
-        config.addBuildSettings("MTL_ENABLE_DEBUG_INFO", "NO");
-        config.addBuildSettings("SDKROOT", "macosx");
-        xcodeProject->buildConfigurations.push_back(std::move(buildConfiguration));
-    }
-    {
-        auto buildConfiguration = std::make_shared<XCBuildConfiguration>();
-        auto & config = *buildConfiguration;
-        config.uuid = "A932DE901BFCD3CC0006E050";
-        config.name = "Debug";
-        config.addBuildSettings("PRODUCT_NAME", "\"$(TARGET_NAME)\"");
-        xcodeProject->buildConfigurations.push_back(std::move(buildConfiguration));
-    }
-    {
-        auto buildConfiguration = std::make_shared<XCBuildConfiguration>();
-        auto & config = *buildConfiguration;
-        config.uuid = "A932DE911BFCD3CC0006E050";
-        config.name = "Release";
-        config.addBuildSettings("PRODUCT_NAME", "\"$(TARGET_NAME)\"");
-        xcodeProject->buildConfigurations.push_back(std::move(buildConfiguration));
-    }
+        config->addBuildSettings("GCC_WARN_64_TO_32_BIT_CONVERSION", "YES");
+        config->addBuildSettings("GCC_WARN_ABOUT_RETURN_TYPE", "YES_ERROR");
+        config->addBuildSettings("GCC_WARN_UNDECLARED_SELECTOR", "YES");
+        config->addBuildSettings("GCC_WARN_UNINITIALIZED_AUTOS", "YES_AGGRESSIVE");
+        config->addBuildSettings("GCC_WARN_UNUSED_FUNCTION", "YES");
+        config->addBuildSettings("GCC_WARN_UNUSED_VARIABLE", "YES");
+        config->addBuildSettings("MACOSX_DEPLOYMENT_TARGET", "10.11");
+        config->addBuildSettings("MTL_ENABLE_DEBUG_INFO", "YES");
+        config->addBuildSettings("ONLY_ACTIVE_ARCH", "YES");
+        config->addBuildSettings("SDKROOT", "macosx");
+        return std::move(config);
+    } ();
+    const auto buildConfigurationRelease = [&] {
+        auto config = std::make_shared<XCBuildConfiguration>();
+        config->name = "Release";
+        config->addBuildSettings("ALWAYS_SEARCH_USER_PATHS", "NO");
+        config->addBuildSettings("CLANG_CXX_LANGUAGE_STANDARD", "\"gnu++0x\"");
+        config->addBuildSettings("CLANG_CXX_LIBRARY", "\"libc++\"");
+        config->addBuildSettings("CLANG_ENABLE_MODULES", "YES");
+        config->addBuildSettings("CLANG_ENABLE_OBJC_ARC", "YES");
+        config->addBuildSettings("CLANG_WARN_BOOL_CONVERSION", "YES");
+        config->addBuildSettings("CLANG_WARN_CONSTANT_CONVERSION", "YES");
+        config->addBuildSettings("CLANG_WARN_DIRECT_OBJC_ISA_USAGE", "YES_ERROR");
+        config->addBuildSettings("CLANG_WARN_EMPTY_BODY", "YES");
+        config->addBuildSettings("CLANG_WARN_ENUM_CONVERSION", "YES");
+        config->addBuildSettings("CLANG_WARN_INT_CONVERSION", "YES");
+        config->addBuildSettings("CLANG_WARN_OBJC_ROOT_CLASS", "YES_ERROR");
+        config->addBuildSettings("CLANG_WARN_UNREACHABLE_CODE", "YES");
+        config->addBuildSettings("CLANG_WARN__DUPLICATE_METHOD_MATCH", "YES");
+        config->addBuildSettings("CODE_SIGN_IDENTITY", "\"-\"");
+        config->addBuildSettings("COPY_PHASE_STRIP", "NO");
+        config->addBuildSettings("DEBUG_INFORMATION_FORMAT", "\"dwarf-with-dsym\"");
+        config->addBuildSettings("ENABLE_NS_ASSERTIONS", "NO");
+        config->addBuildSettings("ENABLE_STRICT_OBJC_MSGSEND", "YES");
+        config->addBuildSettings("GCC_C_LANGUAGE_STANDARD", "gnu99");
+        config->addBuildSettings("GCC_NO_COMMON_BLOCKS", "YES");
+        config->addBuildSettings("GCC_WARN_64_TO_32_BIT_CONVERSION", "YES");
+        config->addBuildSettings("GCC_WARN_ABOUT_RETURN_TYPE", "YES_ERROR");
+        config->addBuildSettings("GCC_WARN_UNDECLARED_SELECTOR", "YES");
+        config->addBuildSettings("GCC_WARN_UNINITIALIZED_AUTOS", "YES_AGGRESSIVE");
+        config->addBuildSettings("GCC_WARN_UNUSED_FUNCTION", "YES");
+        config->addBuildSettings("GCC_WARN_UNUSED_VARIABLE", "YES");
+        config->addBuildSettings("MACOSX_DEPLOYMENT_TARGET", "10.11");
+        config->addBuildSettings("MTL_ENABLE_DEBUG_INFO", "NO");
+        config->addBuildSettings("SDKROOT", "macosx");
+        return std::move(config);
+    }();
+    const auto buildConfigurationProductDebug = [&] {
+        auto config = std::make_shared<XCBuildConfiguration>();
+        config->name = "Debug";
+        config->addBuildSettings("PRODUCT_NAME", "\"$(TARGET_NAME)\"");
+        return std::move(config);
+    }();
+    const auto buildConfigurationProductRelease = [&] {
+        auto config = std::make_shared<XCBuildConfiguration>();
+        config->name = "Release";
+        config->addBuildSettings("PRODUCT_NAME", "\"$(TARGET_NAME)\"");
+        return std::move(config);
+    }();
 
-    // XCConfigurationList
-    {
+    const auto configurationListForProject = [&] {
         auto configurationList = std::make_shared<XCConfigurationList>();
-        configurationList->uuid = "A932DE831BFCD3CC0006E050";
-        configurationList->buildConfigurations.push_back(findByUuid(xcodeProject->buildConfigurations, "A932DE8D1BFCD3CC0006E050"));
-        configurationList->buildConfigurations.push_back(findByUuid(xcodeProject->buildConfigurations, "A932DE8E1BFCD3CC0006E050"));
+        configurationList->buildConfigurations.push_back(buildConfigurationDebug);
+        configurationList->buildConfigurations.push_back(buildConfigurationRelease);
         configurationList->defaultConfigurationIsVisible = "0";
         configurationList->defaultConfigurationName = "Release";
-        xcodeProject->configurationLists.push_back(std::move(configurationList));
-    }
-    {
+        return std::move(configurationList);
+    }();
+    const auto configurationListForNativeTarget = [&] {
         auto configurationList = std::make_shared<XCConfigurationList>();
-        configurationList->uuid = "A932DE8F1BFCD3CC0006E050";
-        configurationList->buildConfigurations.push_back(findByUuid(xcodeProject->buildConfigurations, "A932DE901BFCD3CC0006E050"));
-        configurationList->buildConfigurations.push_back(findByUuid(xcodeProject->buildConfigurations, "A932DE911BFCD3CC0006E050"));
+        configurationList->buildConfigurations.push_back(buildConfigurationProductDebug);
+        configurationList->buildConfigurations.push_back(buildConfigurationProductRelease);
         configurationList->defaultConfigurationIsVisible = "0";
         configurationList->defaultConfigurationName = "Release";
-        xcodeProject->configurationLists.push_back(std::move(configurationList));
-    }
+        return std::move(configurationList);
+    }();
 
-    // PBXGroup
-    {
-        auto group = std::make_shared<PBXGroup>();
-        group->uuid = "A932DE891BFCD3CC0006E050";
-        group->children.push_back(findByUuid(xcodeProject->fileReferences, "A932DE881BFCD3CC0006E050"));
-        group->name = "Products";
-        xcodeProject->groups.push_back(std::move(group));
-    }
-    {
-        auto group = std::make_shared<PBXGroup>();
-        group->uuid = "A932DE8A1BFCD3CC0006E050";
-        group->name = "Source";
-        for (auto & source : options.sources) {
-            group->children.push_back(findByPath(xcodeProject->fileReferences, source));
-        }
-        xcodeProject->groups.push_back(std::move(group));
-    }
-    {
-        auto group = std::make_shared<PBXGroup>();
-        group->uuid = "A932DE7F1BFCD3CC0006E050";
-        group->children.push_back(findByUuid(xcodeProject->groups, "A932DE8A1BFCD3CC0006E050"));
-        group->children.push_back(findByUuid(xcodeProject->groups, "A932DE891BFCD3CC0006E050"));
-        xcodeProject->groups.push_back(std::move(group));
-    }
-
-    // PBXFrameworksBuildPhase
-    {
-        auto phase = std::make_shared<PBXFrameworksBuildPhase>();
-        phase->uuid = "A932DE851BFCD3CC0006E050";
+    const auto sourcesBuildPhase = [&] {
+        auto phase = std::make_shared<PBXSourcesBuildPhase>();
         phase->buildActionMask = "2147483647";
         phase->runOnlyForDeploymentPostprocessing = "0";
-        xcodeProject->frameworkBuildPhases.push_back(std::move(phase));
-    }
+        for (auto & child : sourceGroup->children) {
+            auto source = std::dynamic_pointer_cast<PBXFileReference>(child);
+            if (!source || isHeaderFile(source->path)) {
+                continue;
+            }
+            auto file = std::make_shared<PBXBuildFile>();
+            file->fileRef = source;
+            phase->files.push_back(std::move(file));
+        }
+        return std::move(phase);
+    }();
 
-    // PBXCopyFilesBuildPhase
-    {
+    const auto frameworksBuildPhase = [&] {
+        auto phase = std::make_shared<PBXFrameworksBuildPhase>();
+        phase->buildActionMask = "2147483647";
+        phase->runOnlyForDeploymentPostprocessing = "0";
+        return std::move(phase);
+    }();
+
+    const auto copyFilesBuildPhase = [&] {
         auto phase = std::make_shared<PBXCopyFilesBuildPhase>();
-        phase->uuid = "A932DE861BFCD3CC0006E050";
         phase->buildActionMask = "2147483647";
         phase->dstPath = "/usr/share/man/man1/";
         phase->dstSubfolderSpec = "0";
         phase->runOnlyForDeploymentPostprocessing = "1";
-        xcodeProject->copyFilesBuildPhases.push_back(std::move(phase));
-    }
+        return std::move(phase);
+    }();
 
-    // PBXNativeTarget
-    {
+    const auto nativeTarget = [&] {
         auto target = std::make_shared<PBXNativeTarget>();
-        target->uuid = "A932DE871BFCD3CC0006E050";
-        target->buildConfigurationList = findByUuid(xcodeProject->configurationLists, "A932DE8F1BFCD3CC0006E050");
-        target->buildPhases.push_back(findByUuid(xcodeProject->sourcesBuildPhases, "A932DE841BFCD3CC0006E050"));
-        target->buildPhases.push_back(findByUuid(xcodeProject->frameworkBuildPhases, "A932DE851BFCD3CC0006E050"));
-        target->buildPhases.push_back(findByUuid(xcodeProject->copyFilesBuildPhases, "A932DE861BFCD3CC0006E050"));
+        target->buildConfigurationList = configurationListForNativeTarget;
+        target->buildPhases.push_back(sourcesBuildPhase);
+        target->buildPhases.push_back(frameworksBuildPhase);
+        target->buildPhases.push_back(copyFilesBuildPhase);
         target->name = options.targetName;
         target->productName = options.productName;
-        target->productReference = findByUuid(xcodeProject->fileReferences, "A932DE881BFCD3CC0006E050");
+        target->productReference = productReference;
         target->productType = "\"com.apple.product-type.tool\"";
-        xcodeProject->nativeTargets.push_back(std::move(target));
-    }
+        return std::move(target);
+    }();
 
-    // PBXProject
-    {
+    const auto pbxProject = [&] {
         auto project = std::make_shared<PBXProject>();
-        project->uuid = "A932DE801BFCD3CC0006E050";
-        project->buildConfigurationList = findByUuid(xcodeProject->configurationLists, "A932DE831BFCD3CC0006E050");
+        project->buildConfigurationList = configurationListForProject;
         project->compatibilityVersion = "\"Xcode 3.2\"";
         project->developmentRegion = "English";
         project->hasScannedForEncodings = "0";
         project->knownRegions = {"en"};
-        project->mainGroup = findByUuid(xcodeProject->groups, "A932DE7F1BFCD3CC0006E050");
-        project->productRefGroup = findByUuid(xcodeProject->groups, "A932DE891BFCD3CC0006E050");
+        project->mainGroup = mainGroup;
+        project->productRefGroup = productsGroup;
         project->projectDirPath = "\"\"";
         project->projectRoot = "\"\"";
-        project->targets.push_back(findByUuid(xcodeProject->nativeTargets, "A932DE871BFCD3CC0006E050"));
+        project->targets.push_back(nativeTarget);
 
         project->addAttribute("LastUpgradeCheck", "0710");
         if (!options.author.empty()) {
@@ -771,19 +696,39 @@ std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& op
         std::vector<XcodeTargetAttribute> targetAttributes;
         {
             XcodeTargetAttribute attribute;
-            attribute.target = findByUuid(xcodeProject->nativeTargets, "A932DE871BFCD3CC0006E050");
+            attribute.target = nativeTarget;
             attribute.CreatedOnToolsVersion = "7.1.1";
             targetAttributes.push_back(std::move(attribute));
         }
         project->addAttribute("TargetAttributes", std::move(targetAttributes));
+        return std::move(project);
+    }();
 
-        xcodeProject->projects.push_back(std::move(project));
-    }
-
+    auto xcodeProject = std::make_shared<XcodeProject>();
     xcodeProject->name = options.targetName;
     xcodeProject->archiveVersion = "1";
     xcodeProject->objectVersion = "46";
-    xcodeProject->rootObject = findByUuid(xcodeProject->projects, "A932DE801BFCD3CC0006E050");
+    xcodeProject->rootObject = pbxProject;
+    for (auto & child : sourceGroup->children) {
+        if (auto source = std::dynamic_pointer_cast<PBXFileReference>(child)) {
+            xcodeProject->fileReferences.push_back(source);
+        }
+    }
+    xcodeProject->fileReferences.push_back(productReference);
+    xcodeProject->groups.push_back(sourceGroup);
+    xcodeProject->groups.push_back(productsGroup);
+    xcodeProject->groups.push_back(mainGroup);
+    xcodeProject->buildConfigurations.push_back(buildConfigurationDebug);
+    xcodeProject->buildConfigurations.push_back(buildConfigurationRelease);
+    xcodeProject->buildConfigurations.push_back(buildConfigurationProductDebug);
+    xcodeProject->buildConfigurations.push_back(buildConfigurationProductRelease);
+    xcodeProject->configurationLists.push_back(configurationListForProject);
+    xcodeProject->configurationLists.push_back(configurationListForNativeTarget);
+    xcodeProject->sourcesBuildPhases.push_back(sourcesBuildPhase);
+    xcodeProject->frameworkBuildPhases.push_back(frameworksBuildPhase);
+    xcodeProject->copyFilesBuildPhases.push_back(copyFilesBuildPhase);
+    xcodeProject->nativeTargets.push_back(nativeTarget);
+    xcodeProject->projects.push_back(pbxProject);
 
     std::sort(std::begin(xcodeProject->groups), std::end(xcodeProject->groups),
         [](const std::shared_ptr<PBXGroup>& a, const std::shared_ptr<PBXGroup>& b) {
@@ -867,7 +812,7 @@ void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
 
     printer.beginSection("PBXFrameworksBuildPhase");
     for (auto & phase : xcodeProject.frameworkBuildPhases) {
-        printer.beginKeyValue(phase->getUuid() + " " + encodeComment(phase->comments()));
+        printer.beginKeyValue(phase->uuid + " " + encodeComment(phase->comments()));
             printer.beginObject();
                 printer.printKeyValue("isa", phase->isa());
                 printer.printKeyValue("buildActionMask", phase->buildActionMask);
@@ -905,7 +850,10 @@ void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
                 printer.printKeyValue("buildConfigurationList",
                     target->buildConfigurationList->uuid
                     + " "
-                    + encodeComment("Build configuration list for " + target->isa() + " \""+ target->name +"\""));
+                    + encodeComment("Build configuration list for "
+                        + target->isa()
+                        + " "
+                        + encodeDoubleQuotes(target->name)));
                 printer.printKeyValue("buildPhases", target->getBuildPhasesString());
                 printer.printKeyValue("buildRules", target->buildRules);
                 printer.printKeyValue("dependencies", target->dependencies);
