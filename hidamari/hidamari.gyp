@@ -13,7 +13,6 @@
       'product_name': 'hidamari',
       'type': 'executable',
       'include_dirs': [
-        'rapidjson/include',
         '../somerachan/src',
       ],
       'sources': [

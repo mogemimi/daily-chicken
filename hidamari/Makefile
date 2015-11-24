@@ -10,3 +10,7 @@ test:
 
 hidamari:
 	@open http://ch.nicovideo.jp/hidamari_01
+
+dogfood:
+	./../bin/hidamari -generator=xcode -oHidamari2 \
+		*.cpp *.h -I../somerachan/src

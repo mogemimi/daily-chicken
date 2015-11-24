@@ -494,7 +494,8 @@ bool isHeaderFile(const std::string& path) noexcept
 void setDefaultBuildConfig(XCBuildConfiguration& config)
 {
     config.addBuildSettings("ALWAYS_SEARCH_USER_PATHS", "NO");
-    config.addBuildSettings("CLANG_CXX_LANGUAGE_STANDARD", "\"gnu++0x\"");
+    //config.addBuildSettings("CLANG_CXX_LANGUAGE_STANDARD", "\"gnu++0x\""); // Xcode default
+    config.addBuildSettings("CLANG_CXX_LANGUAGE_STANDARD", "\"c++14\""); // custom settings
     config.addBuildSettings("CLANG_CXX_LIBRARY", "\"libc++\"");
     config.addBuildSettings("CLANG_ENABLE_MODULES", "YES");
     config.addBuildSettings("CLANG_ENABLE_OBJC_ARC", "YES");
@@ -509,7 +510,8 @@ void setDefaultBuildConfig(XCBuildConfiguration& config)
     config.addBuildSettings("CLANG_WARN__DUPLICATE_METHOD_MATCH", "YES");
     config.addBuildSettings("CODE_SIGN_IDENTITY", "\"-\"");
     config.addBuildSettings("COPY_PHASE_STRIP", "NO");
-    config.addBuildSettings("GCC_C_LANGUAGE_STANDARD", "gnu99");
+    //config.addBuildSettings("GCC_C_LANGUAGE_STANDARD", "gnu99"); // Xcode default
+    config.addBuildSettings("GCC_C_LANGUAGE_STANDARD", "c11"); // custom settings
     config.addBuildSettings("GCC_NO_COMMON_BLOCKS", "YES");
     config.addBuildSettings("GCC_WARN_64_TO_32_BIT_CONVERSION", "YES");
     config.addBuildSettings("GCC_WARN_ABOUT_RETURN_TYPE", "YES_ERROR");
@@ -601,13 +603,13 @@ std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& op
         config->addBuildSettings("MTL_ENABLE_DEBUG_INFO", "NO");
         return std::move(config);
     }();
-    const auto buildConfigurationProductDebug = [&] {
+    const auto buildConfigurationTargetDebug = [&] {
         auto config = std::make_shared<XCBuildConfiguration>();
         config->name = "Debug";
         config->addBuildSettings("PRODUCT_NAME", "\"$(TARGET_NAME)\"");
         return std::move(config);
     }();
-    const auto buildConfigurationProductRelease = [&] {
+    const auto buildConfigurationTargetRelease = [&] {
         auto config = std::make_shared<XCBuildConfiguration>();
         config->name = "Release";
         config->addBuildSettings("PRODUCT_NAME", "\"$(TARGET_NAME)\"");
@@ -624,8 +626,8 @@ std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& op
     }();
     const auto configurationListForNativeTarget = [&] {
         auto configurationList = std::make_shared<XCConfigurationList>();
-        configurationList->buildConfigurations.push_back(buildConfigurationProductDebug);
-        configurationList->buildConfigurations.push_back(buildConfigurationProductRelease);
+        configurationList->buildConfigurations.push_back(buildConfigurationTargetDebug);
+        configurationList->buildConfigurations.push_back(buildConfigurationTargetRelease);
         configurationList->defaultConfigurationIsVisible = "0";
         configurationList->defaultConfigurationName = "Release";
         return std::move(configurationList);
@@ -721,8 +723,8 @@ std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& op
     xcodeProject->groups.push_back(mainGroup);
     xcodeProject->buildConfigurations.push_back(buildConfigurationDebug);
     xcodeProject->buildConfigurations.push_back(buildConfigurationRelease);
-    xcodeProject->buildConfigurations.push_back(buildConfigurationProductDebug);
-    xcodeProject->buildConfigurations.push_back(buildConfigurationProductRelease);
+    xcodeProject->buildConfigurations.push_back(buildConfigurationTargetDebug);
+    xcodeProject->buildConfigurations.push_back(buildConfigurationTargetRelease);
     xcodeProject->configurationLists.push_back(configurationListForProject);
     xcodeProject->configurationLists.push_back(configurationListForNativeTarget);
     xcodeProject->sourcesBuildPhases.push_back(sourcesBuildPhase);
