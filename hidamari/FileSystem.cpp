@@ -22,7 +22,9 @@
 namespace somera {
 namespace {
 
-std::string::size_type findFirstOfSlash(const std::string& path, std::string::size_type first = 0)
+std::string::size_type findFirstOfSlash(
+    const std::string& path,
+    std::string::size_type first = 0)
 {
     assert(first != std::string::npos);
     auto index = path.find_first_of('/', first);

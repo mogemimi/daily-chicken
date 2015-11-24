@@ -64,6 +64,12 @@ void sortByName(std::vector<std::string>& names)
         [](const auto& a, const auto& b){ return a < b; });
 }
 
+std::string getAuthorName()
+{
+    return somera::StringHelper::replace(
+        somera::SubprocessHelper::call("git config user.name"), "\n", "");
+}
+
 } // namespace somera
 
 #include "XcodeProject.h"
@@ -118,7 +124,7 @@ int main(int argc, char *argv[])
         options.productName = *path;
     }
     options.targetName = options.productName;
-    options.author = somera::SubprocessHelper::call("git config user.name");
+    options.author = somera::getAuthorName();
 
     for (auto & path : options.includeSearchPaths) {
         path = FileSystem::relative(path, options.generatorOutputDirectory);
