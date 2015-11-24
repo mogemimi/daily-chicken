@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "../somerachan/src/optional.h"
 #include <string>
 #include <sstream>
 #include <vector>
@@ -50,6 +51,8 @@ struct CommandLineParser {
     std::string getExecutablePath() const;
 
     bool exists(const std::string& flag) const;
+
+    Optional<std::string> getValue(const std::string& name) const;
 
     std::vector<std::string> getValues(const std::string& name) const;
 

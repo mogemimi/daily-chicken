@@ -123,11 +123,21 @@ bool CommandLineParser::exists(const std::string& flag) const
     return iter != std::end(flags);
 }
 
+Optional<std::string> CommandLineParser::getValue(const std::string& name) const
+{
+    auto iter = std::find_if(hints.begin(), hints.end(),
+        [&](const CommandLineArgumentHint& hint){ return hint.name == name; });
+    if (iter == std::end(hints) || iter->values.empty()) {
+        return somera::NullOpt;
+    }
+    return iter->values.front();
+}
+
 std::vector<std::string> CommandLineParser::getValues(const std::string& name) const
 {
     auto iter = std::find_if(hints.begin(), hints.end(),
         [&](const CommandLineArgumentHint& hint){ return hint.name == name; });
-    if (iter == hints.end()) {
+    if (iter == std::end(hints)) {
         return {};
     }
     return iter->values;

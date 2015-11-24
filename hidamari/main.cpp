@@ -110,14 +110,12 @@ int main(int argc, char *argv[])
         options.sources.push_back(path);
     }
 
-    for (auto & path : parser.getValues("-generator-output=")) {
-        options.generatorOutputDirectory = path;
-        break;
+    if (auto path = parser.getValue("-generator-output=")) {
+        options.generatorOutputDirectory = *path;
     }
     options.productName = "MyHoge";
-    for (auto & path : parser.getValues("-o")) {
-        options.productName = path;
-        break;
+    if (auto path = parser.getValue("-o")) {
+        options.productName = *path;
     }
     options.targetName = options.productName;
     options.author = somera::SubprocessHelper::call("git config user.name");
@@ -141,8 +139,8 @@ int main(int argc, char *argv[])
     somera::sortByName(options.libraries);
     somera::sortByName(options.sources);
 
-    for (auto & path : parser.getValues("-generator=")) {
-        if (path == "xcode") {
+    if (auto generator = parser.getValue("-generator=")) {
+        if (*generator == "xcode") {
             auto error = somera::Xcode::generateXcodeProject(options);
             if (error.hasError) {
                 std::cerr << error.description << std::endl;
@@ -150,7 +148,6 @@ int main(int argc, char *argv[])
             }
             std::cout << "Generated." << std::endl;
         }
-        break;
     }
 
     return 0;
