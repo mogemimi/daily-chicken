@@ -292,6 +292,12 @@ struct XCBuildConfiguration final : public XcodeObject {
 
     void addBuildSettings(const std::string& key, const std::string& value)
     {
+        auto iter = std::find_if(std::begin(buildSettings), std::end(buildSettings),
+            [&](const auto& a){ return a.first == key; });
+        if (iter != std::end(buildSettings)) {
+            iter->second = value;
+            return;
+        }
         buildSettings.emplace_back(key, value);
         std::sort(std::begin(buildSettings), std::end(buildSettings),
             [](const auto& a, const auto& b){ return a.first < b.first; });
@@ -299,6 +305,12 @@ struct XCBuildConfiguration final : public XcodeObject {
 
     void addBuildSettings(const std::string& key, const std::vector<std::string>& value)
     {
+        auto iter = std::find_if(std::begin(buildSettings), std::end(buildSettings),
+            [&](const auto& a){ return a.first == key; });
+        if (iter != std::end(buildSettings)) {
+            iter->second = value;
+            return;
+        }
         buildSettings.emplace_back(key, value);
         std::sort(std::begin(buildSettings), std::end(buildSettings),
             [](const auto& a, const auto& b){ return a.first < b.first; });
@@ -507,8 +519,7 @@ bool isHeaderFile(const std::string& path) noexcept
 void setDefaultBuildConfig(XCBuildConfiguration& config)
 {
     config.addBuildSettings("ALWAYS_SEARCH_USER_PATHS", "NO");
-    //config.addBuildSettings("CLANG_CXX_LANGUAGE_STANDARD", "\"gnu++0x\""); // Xcode default
-    config.addBuildSettings("CLANG_CXX_LANGUAGE_STANDARD", "\"c++14\""); // custom settings
+    config.addBuildSettings("CLANG_CXX_LANGUAGE_STANDARD", "\"c++14\"");
     config.addBuildSettings("CLANG_CXX_LIBRARY", "\"libc++\"");
     config.addBuildSettings("CLANG_ENABLE_MODULES", "YES");
     config.addBuildSettings("CLANG_ENABLE_OBJC_ARC", "YES");
@@ -523,8 +534,7 @@ void setDefaultBuildConfig(XCBuildConfiguration& config)
     config.addBuildSettings("CLANG_WARN__DUPLICATE_METHOD_MATCH", "YES");
     config.addBuildSettings("CODE_SIGN_IDENTITY", "\"-\"");
     config.addBuildSettings("COPY_PHASE_STRIP", "NO");
-    //config.addBuildSettings("GCC_C_LANGUAGE_STANDARD", "gnu99"); // Xcode default
-    config.addBuildSettings("GCC_C_LANGUAGE_STANDARD", "c11"); // custom settings
+    config.addBuildSettings("GCC_C_LANGUAGE_STANDARD", "c11");
     config.addBuildSettings("GCC_NO_COMMON_BLOCKS", "YES");
     config.addBuildSettings("GCC_WARN_64_TO_32_BIT_CONVERSION", "YES");
     config.addBuildSettings("GCC_WARN_ABOUT_RETURN_TYPE", "YES_ERROR");
@@ -547,6 +557,21 @@ void setSearchPathsToBuildConfig(
     if (!options.librarySearchPaths.empty()) {
         config.addBuildSettings(
             "LIBRARY_SEARCH_PATHS", options.librarySearchPaths);
+    }
+
+    {
+        ///@todo Please refactor here
+        auto iter = options.buildSettings.find("-std=");
+        if (iter != std::end(options.buildSettings)) {
+            config.addBuildSettings("CLANG_CXX_LANGUAGE_STANDARD", encodeDoubleQuotes(iter->second));
+        }
+    }
+    {
+        ///@todo Please refactor here
+        auto iter = options.buildSettings.find("-stdlib=");
+        if (iter != std::end(options.buildSettings)) {
+            config.addBuildSettings("CLANG_CXX_LIBRARY", encodeDoubleQuotes(iter->second));
+        }
     }
 }
 

@@ -13,4 +13,8 @@ hidamari:
 
 dogfood:
 	./../bin/hidamari -generator=xcode -oHidamari2 \
-		*.cpp *.h -I../somerachan/src
+		-std=c++14 \
+		-stdlib=libc++ \
+		-I../somerachan/src \
+		*.cpp \
+		*.h

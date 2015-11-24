@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstdarg>
 #include <utility>
+#include <type_traits>
 
 namespace somera {
 namespace {

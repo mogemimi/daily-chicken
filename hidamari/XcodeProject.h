@@ -4,6 +4,7 @@
 
 #include <string>
 #include <vector>
+#include <map>
 
 namespace somera {
 
@@ -33,6 +34,7 @@ struct CompileOptions {
     std::vector<std::string> includeSearchPaths;
     std::vector<std::string> librarySearchPaths;
     std::vector<std::string> flags;
+    std::map<std::string, std::string> buildSettings;
     std::string author;
 };
 

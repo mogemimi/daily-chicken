@@ -37,6 +37,11 @@ void setupCommandLineParser(CommandLineParser & parser)
         "Write output to <file>");
     parser.addArgument("-generator-output=", CommandLineArgumentType::JoinedOrSeparate,
         "Generate build files under the <dir>");
+
+    parser.addArgument("-std=", CommandLineArgumentType::JoinedOrSeparate,
+        "Language standard to compile for");
+    parser.addArgument("-stdlib=", CommandLineArgumentType::JoinedOrSeparate,
+        "C++ standard library to use");
 }
 
 #if 0
@@ -125,6 +130,13 @@ int main(int argc, char *argv[])
     }
     options.targetName = options.productName;
     options.author = somera::getAuthorName();
+
+    if (auto value = parser.getValue("-std=")) {
+        options.buildSettings.emplace("-std=", *value);
+    }
+    if (auto value = parser.getValue("-stdlib=")) {
+        options.buildSettings.emplace("-stdlib=", *value);
+    }
 
     for (auto & path : options.includeSearchPaths) {
         path = FileSystem::relative(path, options.generatorOutputDirectory);
