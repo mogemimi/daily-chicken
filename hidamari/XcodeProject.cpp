@@ -1,6 +1,6 @@
 // Copyright (c) 2015 mogemimi. Distributed under the MIT license.
 
-#include "ProjectTemplate.h"
+#include "XcodeProject.h"
 #include "FileSystem.h"
 #include "StringHelper.h"
 #include "Any.h"

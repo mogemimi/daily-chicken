@@ -2,7 +2,7 @@
 
 #include "CommandLineParser.h"
 #include "FileSystem.h"
-#include "ProjectTemplate.h"
+#include "XcodeProject.h"
 #include "StringHelper.h"
 #include "SubprocessHelper.h"
 #include <iostream>
@@ -60,7 +60,7 @@ std::string fileToString(const std::string& source)
 
 } // namespace somera
 
-#include "ProjectTemplate.h"
+#include "XcodeProject.h"
 
 int main(int argc, char *argv[])
 {
