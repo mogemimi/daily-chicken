@@ -26,7 +26,8 @@ namespace Xcode {
 
 struct CompileOptions {
     std::string generatorOutputDirectory;
-    std::string outputFileName;
+    std::string productName;
+    std::string targetName;
     std::vector<std::string> sources;
     std::vector<std::string> libraries;
     std::vector<std::string> includeSearchPaths;

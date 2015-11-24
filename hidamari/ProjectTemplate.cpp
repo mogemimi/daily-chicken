@@ -537,7 +537,7 @@ std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& op
         f->uuid = "A932DE881BFCD3CC0006E050";
         f->explicitFileType = "\"compiled.mach-o.executable\"";
         f->includeInIndex = "0";
-        f->path = options.outputFileName;
+        f->path = options.productName;
         f->sourceTree = "BUILT_PRODUCTS_DIR";
         xcodeProject->fileReferences.push_back(std::move(f));
     }
@@ -741,8 +741,8 @@ std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& op
         target->buildPhases.push_back(findByUuid(xcodeProject->sourcesBuildPhases, "A932DE841BFCD3CC0006E050"));
         target->buildPhases.push_back(findByUuid(xcodeProject->frameworkBuildPhases, "A932DE851BFCD3CC0006E050"));
         target->buildPhases.push_back(findByUuid(xcodeProject->copyFilesBuildPhases, "A932DE861BFCD3CC0006E050"));
-        target->name = options.outputFileName;
-        target->productName = options.outputFileName;
+        target->name = options.targetName;
+        target->productName = options.productName;
         target->productReference = findByUuid(xcodeProject->fileReferences, "A932DE881BFCD3CC0006E050");
         target->productType = "\"com.apple.product-type.tool\"";
         xcodeProject->nativeTargets.push_back(std::move(target));
@@ -780,7 +780,7 @@ std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& op
         xcodeProject->projects.push_back(std::move(project));
     }
 
-    xcodeProject->name = options.outputFileName;
+    xcodeProject->name = options.targetName;
     xcodeProject->archiveVersion = "1";
     xcodeProject->objectVersion = "46";
     xcodeProject->rootObject = findByUuid(xcodeProject->projects, "A932DE801BFCD3CC0006E050");
@@ -1064,7 +1064,8 @@ GeneratorError Xcode::generateXcodeProject(const CompileOptions& options)
     namespace FileSystem = somera::FileSystem;
 
     const auto xcodeprojPath = FileSystem::join(
-        options.generatorOutputDirectory, options.outputFileName + ".xcodeproj");
+        options.generatorOutputDirectory,
+        options.targetName + ".xcodeproj");
 
     if (FileSystem::exists(xcodeprojPath)) {
         if (!FileSystem::isDirectory(xcodeprojPath)) {

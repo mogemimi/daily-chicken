@@ -108,11 +108,12 @@ int main(int argc, char *argv[])
         options.generatorOutputDirectory = path;
         break;
     }
-    options.outputFileName = "MyHoge";
+    options.productName = "MyHoge";
     for (auto & path : parser.getValues("-o")) {
-        options.outputFileName = path;
+        options.productName = path;
         break;
     }
+    options.targetName = options.productName;
     options.author = somera::SubprocessHelper::call("git config user.name");
 
     for (auto & path : options.sources) {
