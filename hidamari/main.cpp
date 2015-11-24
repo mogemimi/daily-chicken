@@ -58,6 +58,12 @@ std::string fileToString(const std::string& source)
 
 #endif
 
+void sortByName(std::vector<std::string>& names)
+{
+    std::sort(std::begin(names), std::end(names),
+        [](const auto& a, const auto& b){ return a < b; });
+}
+
 } // namespace somera
 
 #include "XcodeProject.h"
@@ -116,10 +122,24 @@ int main(int argc, char *argv[])
     options.targetName = options.productName;
     options.author = somera::SubprocessHelper::call("git config user.name");
 
+    for (auto & path : options.includeSearchPaths) {
+        path = FileSystem::relative(path, options.generatorOutputDirectory);
+        std::cout << "[Path (Relative)] " << path << std::endl;
+    }
+    for (auto & path : options.librarySearchPaths) {
+        path = FileSystem::relative(path, options.generatorOutputDirectory);
+        std::cout << "[Path (Relative)] " << path << std::endl;
+    }
+    for (auto & path : options.libraries) {
+        path = FileSystem::relative(path, options.generatorOutputDirectory);
+        std::cout << "[Path (Relative)] " << path << std::endl;
+    }
     for (auto & path : options.sources) {
         path = FileSystem::relative(path, options.generatorOutputDirectory);
         std::cout << "[Path (Relative)] " << path << std::endl;
     }
+    somera::sortByName(options.libraries);
+    somera::sortByName(options.sources);
 
     for (auto & path : parser.getValues("-generator=")) {
         if (path == "xcode") {

@@ -270,17 +270,21 @@ struct PBXSourcesBuildPhase final : public XcodeBuildPhase {
 
 struct XCBuildConfiguration final : public XcodeObject {
     std::string isa() const noexcept override { return "XCBuildConfiguration"; }
-    std::map<std::string, Any> buildSettings;
+    std::vector<std::pair<std::string, Any>> buildSettings;
     std::string name;
 
     void addBuildSettings(const std::string& key, const std::string& value)
     {
-        buildSettings.emplace(key, value);
+        buildSettings.emplace_back(key, value);
+        std::sort(std::begin(buildSettings), std::end(buildSettings),
+            [](const auto& a, const auto& b){ return a.first < b.first; });
     }
 
     void addBuildSettings(const std::string& key, const std::vector<std::string>& value)
     {
-        buildSettings.emplace(key, value);
+        buildSettings.emplace_back(key, value);
+        std::sort(std::begin(buildSettings), std::end(buildSettings),
+            [](const auto& a, const auto& b){ return a.first < b.first; });
     }
 };
 
@@ -430,9 +434,10 @@ public:
     }
 };
 
-void printObject(XcodePrinter & printer, const std::map<std::string, Any>& object)
+void printObject(
+    XcodePrinter & printer,
+    const std::vector<std::pair<std::string, Any>>& object)
 {
-    ///@todo sorting by key [A-Z]
     printer.beginObject();
     for (auto & pair : object) {
         auto & key = pair.first;
