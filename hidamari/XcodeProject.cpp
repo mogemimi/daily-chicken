@@ -491,6 +491,50 @@ bool isHeaderFile(const std::string& path) noexcept
     return (ext == "h" || ext == "hh" || ext == "hpp" || ext == "hxx");
 }
 
+void setDefaultBuildConfig(XCBuildConfiguration& config)
+{
+    config.addBuildSettings("ALWAYS_SEARCH_USER_PATHS", "NO");
+    config.addBuildSettings("CLANG_CXX_LANGUAGE_STANDARD", "\"gnu++0x\"");
+    config.addBuildSettings("CLANG_CXX_LIBRARY", "\"libc++\"");
+    config.addBuildSettings("CLANG_ENABLE_MODULES", "YES");
+    config.addBuildSettings("CLANG_ENABLE_OBJC_ARC", "YES");
+    config.addBuildSettings("CLANG_WARN_BOOL_CONVERSION", "YES");
+    config.addBuildSettings("CLANG_WARN_CONSTANT_CONVERSION", "YES");
+    config.addBuildSettings("CLANG_WARN_DIRECT_OBJC_ISA_USAGE", "YES_ERROR");
+    config.addBuildSettings("CLANG_WARN_EMPTY_BODY", "YES");
+    config.addBuildSettings("CLANG_WARN_ENUM_CONVERSION", "YES");
+    config.addBuildSettings("CLANG_WARN_INT_CONVERSION", "YES");
+    config.addBuildSettings("CLANG_WARN_OBJC_ROOT_CLASS", "YES_ERROR");
+    config.addBuildSettings("CLANG_WARN_UNREACHABLE_CODE", "YES");
+    config.addBuildSettings("CLANG_WARN__DUPLICATE_METHOD_MATCH", "YES");
+    config.addBuildSettings("CODE_SIGN_IDENTITY", "\"-\"");
+    config.addBuildSettings("COPY_PHASE_STRIP", "NO");
+    config.addBuildSettings("GCC_C_LANGUAGE_STANDARD", "gnu99");
+    config.addBuildSettings("GCC_NO_COMMON_BLOCKS", "YES");
+    config.addBuildSettings("GCC_WARN_64_TO_32_BIT_CONVERSION", "YES");
+    config.addBuildSettings("GCC_WARN_ABOUT_RETURN_TYPE", "YES_ERROR");
+    config.addBuildSettings("GCC_WARN_UNDECLARED_SELECTOR", "YES");
+    config.addBuildSettings("GCC_WARN_UNINITIALIZED_AUTOS", "YES_AGGRESSIVE");
+    config.addBuildSettings("GCC_WARN_UNUSED_FUNCTION", "YES");
+    config.addBuildSettings("GCC_WARN_UNUSED_VARIABLE", "YES");
+    config.addBuildSettings("MACOSX_DEPLOYMENT_TARGET", "10.11");
+    config.addBuildSettings("SDKROOT", "macosx");
+}
+
+void setSearchPathsToBuildConfig(
+    XCBuildConfiguration& config,
+    const Xcode::CompileOptions& options)
+{
+    if (!options.includeSearchPaths.empty()) {
+        config.addBuildSettings(
+            "HEADER_SEARCH_PATHS", options.includeSearchPaths);
+    }
+    if (!options.librarySearchPaths.empty()) {
+        config.addBuildSettings(
+            "LIBRARY_SEARCH_PATHS", options.librarySearchPaths);
+    }
+}
+
 std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& options)
 {
     const auto sourceGroup = [&] {
@@ -531,78 +575,30 @@ std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& op
     const auto buildConfigurationDebug = [&] {
         auto config = std::make_shared<XCBuildConfiguration>();
         config->name = "Debug";
-        config->addBuildSettings("ALWAYS_SEARCH_USER_PATHS", "NO");
-        config->addBuildSettings("CLANG_CXX_LANGUAGE_STANDARD", "\"gnu++0x\"");
-        config->addBuildSettings("CLANG_CXX_LIBRARY", "\"libc++\"");
-        config->addBuildSettings("CLANG_ENABLE_MODULES", "YES");
-        config->addBuildSettings("CLANG_ENABLE_OBJC_ARC", "YES");
-        config->addBuildSettings("CLANG_WARN_BOOL_CONVERSION", "YES");
-        config->addBuildSettings("CLANG_WARN_CONSTANT_CONVERSION", "YES");
-        config->addBuildSettings("CLANG_WARN_DIRECT_OBJC_ISA_USAGE", "YES_ERROR");
-        config->addBuildSettings("CLANG_WARN_EMPTY_BODY", "YES");
-        config->addBuildSettings("CLANG_WARN_ENUM_CONVERSION", "YES");
-        config->addBuildSettings("CLANG_WARN_INT_CONVERSION", "YES");
-        config->addBuildSettings("CLANG_WARN_OBJC_ROOT_CLASS", "YES_ERROR");
-        config->addBuildSettings("CLANG_WARN_UNREACHABLE_CODE", "YES");
-        config->addBuildSettings("CLANG_WARN__DUPLICATE_METHOD_MATCH", "YES");
-        config->addBuildSettings("CODE_SIGN_IDENTITY", "\"-\"");
-        config->addBuildSettings("COPY_PHASE_STRIP", "NO");
+        setDefaultBuildConfig(*config);
+        setSearchPathsToBuildConfig(*config, options);
         config->addBuildSettings("DEBUG_INFORMATION_FORMAT", "dwarf");
         config->addBuildSettings("ENABLE_STRICT_OBJC_MSGSEND", "YES");
         config->addBuildSettings("ENABLE_TESTABILITY", "YES");
-        config->addBuildSettings("GCC_C_LANGUAGE_STANDARD", "gnu99");
         config->addBuildSettings("GCC_DYNAMIC_NO_PIC", "NO");
-        config->addBuildSettings("GCC_NO_COMMON_BLOCKS", "YES");
         config->addBuildSettings("GCC_OPTIMIZATION_LEVEL", "0");
         config->addBuildSettings("GCC_PREPROCESSOR_DEFINITIONS", std::vector<std::string>{
             "\"DEBUG=1\"",
             "\"$(inherited)\"",
         });
-        config->addBuildSettings("GCC_WARN_64_TO_32_BIT_CONVERSION", "YES");
-        config->addBuildSettings("GCC_WARN_ABOUT_RETURN_TYPE", "YES_ERROR");
-        config->addBuildSettings("GCC_WARN_UNDECLARED_SELECTOR", "YES");
-        config->addBuildSettings("GCC_WARN_UNINITIALIZED_AUTOS", "YES_AGGRESSIVE");
-        config->addBuildSettings("GCC_WARN_UNUSED_FUNCTION", "YES");
-        config->addBuildSettings("GCC_WARN_UNUSED_VARIABLE", "YES");
-        config->addBuildSettings("MACOSX_DEPLOYMENT_TARGET", "10.11");
         config->addBuildSettings("MTL_ENABLE_DEBUG_INFO", "YES");
         config->addBuildSettings("ONLY_ACTIVE_ARCH", "YES");
-        config->addBuildSettings("SDKROOT", "macosx");
         return std::move(config);
     } ();
     const auto buildConfigurationRelease = [&] {
         auto config = std::make_shared<XCBuildConfiguration>();
         config->name = "Release";
-        config->addBuildSettings("ALWAYS_SEARCH_USER_PATHS", "NO");
-        config->addBuildSettings("CLANG_CXX_LANGUAGE_STANDARD", "\"gnu++0x\"");
-        config->addBuildSettings("CLANG_CXX_LIBRARY", "\"libc++\"");
-        config->addBuildSettings("CLANG_ENABLE_MODULES", "YES");
-        config->addBuildSettings("CLANG_ENABLE_OBJC_ARC", "YES");
-        config->addBuildSettings("CLANG_WARN_BOOL_CONVERSION", "YES");
-        config->addBuildSettings("CLANG_WARN_CONSTANT_CONVERSION", "YES");
-        config->addBuildSettings("CLANG_WARN_DIRECT_OBJC_ISA_USAGE", "YES_ERROR");
-        config->addBuildSettings("CLANG_WARN_EMPTY_BODY", "YES");
-        config->addBuildSettings("CLANG_WARN_ENUM_CONVERSION", "YES");
-        config->addBuildSettings("CLANG_WARN_INT_CONVERSION", "YES");
-        config->addBuildSettings("CLANG_WARN_OBJC_ROOT_CLASS", "YES_ERROR");
-        config->addBuildSettings("CLANG_WARN_UNREACHABLE_CODE", "YES");
-        config->addBuildSettings("CLANG_WARN__DUPLICATE_METHOD_MATCH", "YES");
-        config->addBuildSettings("CODE_SIGN_IDENTITY", "\"-\"");
-        config->addBuildSettings("COPY_PHASE_STRIP", "NO");
+        setDefaultBuildConfig(*config);
+        setSearchPathsToBuildConfig(*config, options);
         config->addBuildSettings("DEBUG_INFORMATION_FORMAT", "\"dwarf-with-dsym\"");
         config->addBuildSettings("ENABLE_NS_ASSERTIONS", "NO");
         config->addBuildSettings("ENABLE_STRICT_OBJC_MSGSEND", "YES");
-        config->addBuildSettings("GCC_C_LANGUAGE_STANDARD", "gnu99");
-        config->addBuildSettings("GCC_NO_COMMON_BLOCKS", "YES");
-        config->addBuildSettings("GCC_WARN_64_TO_32_BIT_CONVERSION", "YES");
-        config->addBuildSettings("GCC_WARN_ABOUT_RETURN_TYPE", "YES_ERROR");
-        config->addBuildSettings("GCC_WARN_UNDECLARED_SELECTOR", "YES");
-        config->addBuildSettings("GCC_WARN_UNINITIALIZED_AUTOS", "YES_AGGRESSIVE");
-        config->addBuildSettings("GCC_WARN_UNUSED_FUNCTION", "YES");
-        config->addBuildSettings("GCC_WARN_UNUSED_VARIABLE", "YES");
-        config->addBuildSettings("MACOSX_DEPLOYMENT_TARGET", "10.11");
         config->addBuildSettings("MTL_ENABLE_DEBUG_INFO", "NO");
-        config->addBuildSettings("SDKROOT", "macosx");
         return std::move(config);
     }();
     const auto buildConfigurationProductDebug = [&] {
