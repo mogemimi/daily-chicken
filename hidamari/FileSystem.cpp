@@ -90,18 +90,6 @@ public:
             || (endPos != iter.endPos);
     }
 
-    static std::string substr(const PathIterator& a, const PathIterator& b)
-    {
-        assert(a.source != nullptr);
-        if (a.startPos == std::string::npos) {
-            return "";
-        }
-        if (b.startPos == std::string::npos) {
-            return a.source->substr(a.endPos + 1);
-        }
-        return a.source->substr(a.endPos + 1, b.startPos - a.endPos);
-    }
-
     static PathIterator begin(const std::string& path)
     {
         if (path.empty()) {
@@ -349,8 +337,6 @@ FileSystem::splitExtension(const std::string& path)
 
 std::string FileSystem::normalize(const std::string& path)
 {
-    // See realpath()
-
     auto fullPath = path;
     if (fullPath.front() != '/') { // TODO: Windows's drive (ex. 'C:\' drive)
         // NOTE: 'path' is not full path.
@@ -391,10 +377,6 @@ std::string FileSystem::normalize(const std::string& path)
 std::string
 FileSystem::relative(const std::string& path, const std::string& start)
 {
-    if (path.empty()) {
-        return start;
-    }
-
     const auto fullPath = normalize(path);
     const auto fullPathStart = normalize(start);
 
@@ -406,18 +388,18 @@ FileSystem::relative(const std::string& path, const std::string& start)
             break;
         }
         iterR = PathIterator::next(iterR);
-        if (iterR == PathIterator::end(fullPathStart)) {
-            break;
-        }
         iterL = PathIterator::next(iterL);
     }
 
-    std::string result = PathIterator::substr(iterR, PathIterator::end(fullPathStart));
+    std::string result;
     while (iterR != PathIterator::end(fullPathStart)) {
         result = FileSystem::join(result, "..");
         iterR = PathIterator::next(iterR);
     }
-    result = FileSystem::join(result, PathIterator::substr(iterL, PathIterator::end(fullPath)));
+    while (iterL != PathIterator::end(fullPath)) {
+        result = FileSystem::join(result, *iterL);
+        iterL = PathIterator::next(iterL);
+    }
     return std::move(result);
 }
 
