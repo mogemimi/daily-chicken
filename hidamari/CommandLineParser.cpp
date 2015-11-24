@@ -86,7 +86,12 @@ void CommandLineParser::parse(int argc, const char *argv[])
             }
             else if (hint.type == CommandLineArgumentType::JoinedOrSeparate) {
                 if (StringHelper::startWith(argument, hint.name)) {
-                    hint.values.push_back(argument.substr(hint.name.size()));
+                    auto value = argument.substr(hint.name.size());
+                    if (value.empty() && (i + 1 < argc) && (*argv[i + 1] != '-')) {
+                        value = argv[i + 1];
+                        ++i;
+                    }
+                    hint.values.push_back(std::move(value));
                     found = true;
                     break;
                 }

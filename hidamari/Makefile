@@ -1,47 +1,43 @@
 CXX = clang++
+HEADERS = *.h
 SOURCES = \
-	Any.h \
 	CommandLineParser.cpp \
-	CommandLineParser.h \
 	FileSystem.cpp \
-	FileSystem.h \
 	XcodeProject.cpp \
-	XcodeProject.h \
 	StringHelper.cpp \
-	StringHelper.h \
-	SubprocessHelper.cpp \
-	SubprocessHelper.h
+	SubprocessHelper.cpp
 
 bootstrap:
-	$(CXX) -ohidamari \
-		-std=c++14 \
-		-stdlib=libc++ \
-		-I../somerachan/src \
-		*.cpp
-	@mv hidamari ../bin/
-
-xcode:
-	./../bin/hidamari -generator=xcode \
-		-ohidamari \
+	$(CXX) -o hidamari \
 		-std=c++14 \
 		-stdlib=libc++ \
 		-I../somerachan/src \
 		$(SOURCES) \
-		main.cpp \
-		*.h
+		main.cpp
+	@mv hidamari ../bin/
+
+xcode:
+	./../bin/hidamari -generator=xcode \
+		-o hidamari \
+		-std=c++14 \
+		-stdlib=libc++ \
+		-I../somerachan/src \
+		$(HEADERS) \
+		$(SOURCES) \
+		main.cpp
 	@xcodebuild -project hidamari.xcodeproj -configuration Release
 	@cp build/Release/hidamari ../bin/hidamari
 
 test:
 	./../bin/hidamari -generator=xcode \
-		-oHidamariTest \
+		-o HidamariTest \
 		-std=c++14 \
 		-stdlib=libc++ \
 		-I../somerachan/src \
 		-I../somerachan/iutest/include \
-		tests/*.cpp \
+		$(HEADERS) \
 		$(SOURCES) \
-		*.h
+		tests/*.cpp
 	@xcodebuild -project HidamariTest.xcodeproj -configuration Release
 	./build/Release/HidamariTest
 
