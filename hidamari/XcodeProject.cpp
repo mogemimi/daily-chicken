@@ -5,14 +5,15 @@
 #include "StringHelper.h"
 #include "Any.h"
 #include "../somerachan/src/optional.h"
-#include <fstream>
-#include <utility>
-#include <random>
-#include <ctime>
-#include <sstream>
-#include <vector>
 #include <cassert>
+#include <ctime>
+#include <fstream>
 #include <map>
+#include <random>
+#include <utility>
+#include <sstream>
+#include <string>
+#include <vector>
 
 namespace somera {
 namespace {
@@ -548,7 +549,7 @@ void setDefaultBuildConfig(XCBuildConfiguration& config)
 
 void setSearchPathsToBuildConfig(
     XCBuildConfiguration& config,
-    const Xcode::CompileOptions& options)
+    const CompileOptions& options)
 {
     if (!options.includeSearchPaths.empty()) {
         config.addBuildSettings(
@@ -575,7 +576,7 @@ void setSearchPathsToBuildConfig(
     }
 }
 
-std::shared_ptr<XcodeProject> createXcodeProject(const Xcode::CompileOptions& options)
+std::shared_ptr<XcodeProject> createXcodeProject(const CompileOptions& options)
 {
     const auto sourceGroup = [&] {
         auto group = std::make_shared<PBXGroup>();

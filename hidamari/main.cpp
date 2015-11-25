@@ -2,9 +2,10 @@
 
 #include "CommandLineParser.h"
 #include "FileSystem.h"
-#include "XcodeProject.h"
 #include "StringHelper.h"
 #include "SubprocessHelper.h"
+#include "MSBuild.h"
+#include "XcodeProject.h"
 #include <iostream>
 #include <vector>
 #include <string>
@@ -104,7 +105,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    somera::Xcode::CompileOptions options;
+    somera::CompileOptions options;
 
     for (auto & path : parser.getValues("-I")) {
         std::cout << "[-I] " << path << std::endl;
@@ -166,6 +167,10 @@ int main(int argc, char *argv[])
                 std::cerr << error.description << std::endl;
                 return 1;
             }
+            std::cout << "Generated." << std::endl;
+        }
+        else if (*generator == "msbuild") {
+            somera::MSBuild::generateMSBuildProject();
             std::cout << "Generated." << std::endl;
         }
     }

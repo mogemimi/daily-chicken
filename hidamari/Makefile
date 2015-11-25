@@ -3,6 +3,7 @@ HEADERS = *.h
 SOURCES = \
 	CommandLineParser.cpp \
 	FileSystem.cpp \
+	MSBuild.cpp \
 	XcodeProject.cpp \
 	StringHelper.cpp \
 	SubprocessHelper.cpp

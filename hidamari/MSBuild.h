@@ -5,9 +5,9 @@
 #include "CompileOptions.h"
 
 namespace somera {
-namespace Xcode {
+namespace MSBuild {
 
-GeneratorError generateXcodeProject(const CompileOptions& options);
+void generateMSBuildProject();
 
-} // namespace Xcode
+} // namespace MSBuild
 } // namespace somera
