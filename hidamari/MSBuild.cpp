@@ -157,6 +157,11 @@ public:
         stack.back().hasValue = true;
         stream << value;
     }
+
+    void writeBool(bool value)
+    {
+        writeValue(value ? "true" : "false");
+    }
 };
 
 std::string generateVcxprojFiltersFile(const CompileOptions& options)
@@ -280,7 +285,7 @@ std::string generateVcxprojFile(const CompileOptions& options)
                 writer.writeValue("Application");
             writer.endElement();
             writer.startElement("UseDebugLibraries");
-                writer.writeValue("true");
+                writer.writeBool(true);
             writer.endElement();
             writer.startElement("PlatformToolset");
                 writer.writeValue("v140");
@@ -295,13 +300,13 @@ std::string generateVcxprojFile(const CompileOptions& options)
                 writer.writeValue("Application");
             writer.endElement();
             writer.startElement("UseDebugLibraries");
-                writer.writeValue("false");
+                writer.writeBool(false);
             writer.endElement();
             writer.startElement("PlatformToolset");
                 writer.writeValue("v140");
             writer.endElement();
             writer.startElement("WholeProgramOptimization");
-                writer.writeValue("true");
+                writer.writeBool(true);
             writer.endElement();
             writer.startElement("CharacterSet");
                 writer.writeValue("Unicode");
@@ -313,7 +318,7 @@ std::string generateVcxprojFile(const CompileOptions& options)
                 writer.writeValue("Application");
             writer.endElement();
             writer.startElement("UseDebugLibraries");
-                writer.writeValue("true");
+                writer.writeBool(true);
             writer.endElement();
             writer.startElement("PlatformToolset");
                 writer.writeValue("v140");
@@ -328,13 +333,13 @@ std::string generateVcxprojFile(const CompileOptions& options)
                 writer.writeValue("Application");
             writer.endElement();
             writer.startElement("UseDebugLibraries");
-                writer.writeValue("false");
+                writer.writeBool(false);
             writer.endElement();
             writer.startElement("PlatformToolset");
                 writer.writeValue("v140");
             writer.endElement();
             writer.startElement("WholeProgramOptimization");
-                writer.writeValue("true");
+                writer.writeBool(true);
             writer.endElement();
             writer.startElement("CharacterSet");
                 writer.writeValue("Unicode");
@@ -369,25 +374,25 @@ std::string generateVcxprojFile(const CompileOptions& options)
 
         writer.startElement("PropertyGroup", "Condition=\"'$(Configuration)|$(Platform)'=='Debug|Win32'\"");
             writer.startElement("LinkIncremental");
-                writer.writeValue("true");
+                writer.writeBool(true);
             writer.endElement();
         writer.endElement();
 
         writer.startElement("PropertyGroup", "Condition=\"'$(Configuration)|$(Platform)'=='Debug|x64'\"");
             writer.startElement("LinkIncremental");
-                writer.writeValue("true");
+                writer.writeBool(true);
             writer.endElement();
         writer.endElement();
 
         writer.startElement("PropertyGroup", "Condition=\"'$(Configuration)|$(Platform)'=='Release|Win32'\"");
             writer.startElement("LinkIncremental");
-                writer.writeValue("false");
+                writer.writeBool(false);
             writer.endElement();
         writer.endElement();
 
         writer.startElement("PropertyGroup", "Condition=\"'$(Configuration)|$(Platform)'=='Release|x64'\"");
             writer.startElement("LinkIncremental");
-                writer.writeValue("false");
+                writer.writeBool(false);
             writer.endElement();
         writer.endElement();
 
@@ -405,7 +410,7 @@ std::string generateVcxprojFile(const CompileOptions& options)
                     writer.writeValue("WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)");
                 writer.endElement();
                 writer.startElement("SDLCheck");
-                    writer.writeValue("true");
+                    writer.writeBool(true);
                 writer.endElement();
             writer.endElement();
             writer.startElement("Link");
@@ -413,7 +418,7 @@ std::string generateVcxprojFile(const CompileOptions& options)
                     writer.writeValue("Console");
                 writer.endElement();
                 writer.startElement("GenerateDebugInformation");
-                    writer.writeValue("true");
+                    writer.writeBool(true);
                 writer.endElement();
             writer.endElement();
         writer.endElement();
@@ -432,7 +437,7 @@ std::string generateVcxprojFile(const CompileOptions& options)
                     writer.writeValue("_DEBUG;_CONSOLE;%(PreprocessorDefinitions)");
                 writer.endElement();
                 writer.startElement("SDLCheck");
-                    writer.writeValue("true");
+                    writer.writeBool(true);
                 writer.endElement();
             writer.endElement();
             writer.startElement("Link");
@@ -440,7 +445,7 @@ std::string generateVcxprojFile(const CompileOptions& options)
                     writer.writeValue("Console");
                 writer.endElement();
                 writer.startElement("GenerateDebugInformation");
-                    writer.writeValue("true");
+                    writer.writeBool(true);
                 writer.endElement();
             writer.endElement();
         writer.endElement();
@@ -456,16 +461,16 @@ std::string generateVcxprojFile(const CompileOptions& options)
                     writer.writeValue("MaxSpeed");
                 writer.endElement();
                 writer.startElement("FunctionLevelLinking");
-                    writer.writeValue("true");
+                    writer.writeBool(true);
                 writer.endElement();
                 writer.startElement("IntrinsicFunctions");
-                    writer.writeValue("true");
+                    writer.writeBool(true);
                 writer.endElement();
                 writer.startElement("PreprocessorDefinitions");
                     writer.writeValue("WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)");
                 writer.endElement();
                 writer.startElement("SDLCheck");
-                    writer.writeValue("true");
+                    writer.writeBool(true);
                 writer.endElement();
             writer.endElement();
             writer.startElement("Link");
@@ -473,13 +478,13 @@ std::string generateVcxprojFile(const CompileOptions& options)
                     writer.writeValue("Console");
                 writer.endElement();
                 writer.startElement("GenerateDebugInformation");
-                    writer.writeValue("true");
+                    writer.writeBool(true);
                 writer.endElement();
                 writer.startElement("EnableCOMDATFolding");
-                    writer.writeValue("true");
+                    writer.writeBool(true);
                 writer.endElement();
                 writer.startElement("OptimizeReferences");
-                    writer.writeValue("true");
+                    writer.writeBool(true);
                 writer.endElement();
             writer.endElement();
         writer.endElement();
@@ -495,16 +500,16 @@ std::string generateVcxprojFile(const CompileOptions& options)
                     writer.writeValue("MaxSpeed");
                 writer.endElement();
                 writer.startElement("FunctionLevelLinking");
-                    writer.writeValue("true");
+                    writer.writeBool(true);
                 writer.endElement();
                 writer.startElement("IntrinsicFunctions");
-                    writer.writeValue("true");
+                    writer.writeBool(true);
                 writer.endElement();
                 writer.startElement("PreprocessorDefinitions");
                     writer.writeValue("NDEBUG;_CONSOLE;%(PreprocessorDefinitions)");
                 writer.endElement();
                 writer.startElement("SDLCheck");
-                    writer.writeValue("true");
+                    writer.writeBool(true);
                 writer.endElement();
             writer.endElement();
             writer.startElement("Link");
@@ -512,13 +517,13 @@ std::string generateVcxprojFile(const CompileOptions& options)
                     writer.writeValue("Console");
                 writer.endElement();
                 writer.startElement("GenerateDebugInformation");
-                    writer.writeValue("true");
+                    writer.writeBool(true);
                 writer.endElement();
                 writer.startElement("EnableCOMDATFolding");
-                    writer.writeValue("true");
+                    writer.writeBool(true);
                 writer.endElement();
                 writer.startElement("OptimizeReferences");
-                    writer.writeValue("true");
+                    writer.writeBool(true);
                 writer.endElement();
             writer.endElement();
         writer.endElement();
