@@ -53,7 +53,9 @@ std::string fileToString(const std::string& source)
     std::string line;
     std::stringstream stream;
     while (input && std::getline(input, line)) {
+        line = somera::StringHelper::replace(line, "\\", "\\\\");
         line = somera::StringHelper::replace(line, "\"", "\\\"");
+        line = somera::StringHelper::replace(line, "\r", "\\r");
         line = somera::StringHelper::replace(line, "\t", "  ");
         stream << "\"";
         stream << line;
@@ -170,7 +172,11 @@ int main(int argc, char *argv[])
             std::cout << "Generated." << std::endl;
         }
         else if (*generator == "msbuild") {
-            somera::MSBuild::generateMSBuildProject();
+            auto error = somera::MSBuild::generateMSBuildProject(options);
+            if (error.hasError) {
+                std::cerr << error.description << std::endl;
+                return 1;
+            }
             std::cout << "Generated." << std::endl;
         }
     }

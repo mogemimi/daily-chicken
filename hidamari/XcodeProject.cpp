@@ -448,14 +448,12 @@ public:
         settingsStack.push_back(XcodePrinterSettings{false});
         this->section = sectionIn;
         stream << "\n";
-        stream << StringHelper::format("/* Begin %s section */\n",
-            section.c_str());
+        stream << "/* Begin " << section << " section */\n";
     }
 
     void endSection()
     {
-        stream << StringHelper::format("/* End %s section */\n",
-            section.c_str());
+        stream << "/* End " << section << " section */\n";
         settingsStack.pop_back();
     }
 };
@@ -1016,8 +1014,6 @@ void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
 
 std::string generatePbxproj(const XcodeProject& xcodeProject)
 {
-    using StringHelper::format;
-
     std::stringstream stream;
     stream << "// !$*UTF8*$!\n";
 
