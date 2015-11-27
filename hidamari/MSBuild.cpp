@@ -8,6 +8,7 @@
 #include <cassert>
 #include <fstream>
 #include <map>
+#include <random>
 #include <utility>
 #include <sstream>
 #include <string>
@@ -16,7 +17,39 @@
 namespace somera {
 namespace {
 
-std::string generateSolutionFile(const CompileOptions& options)
+std::string newGuid() noexcept
+{
+    // UUID version 4 (RFC 4122)
+    std::mt19937 random(std::random_device{}());
+    std::uniform_int_distribution<uint16_t> dist(0x0000, 0xffff);
+    auto id = StringHelper::format(
+        "%04X%04X-%04X-%04X-%04X-%04X%04X%04X",
+        dist(random),
+        dist(random),
+        dist(random),
+        (dist(random) & 0x0fff) | 0x4000,
+        dist(random) % 0x3fff + 0x8000,
+        dist(random),
+        dist(random),
+        dist(random));
+    return std::move(id);
+}
+
+struct MSBuildProject {
+    std::string guid;
+    std::string name;
+};
+
+std::string encodeGuid(const std::string& guid)
+{
+    return '{' + guid + '}';
+}
+
+std::string generateSolutionFile(
+    const CompileOptions& options,
+    const MSBuildProject& project,
+    const std::string& solutionFilePath,
+    const std::string& vcxprojPath)
 {
     std::stringstream stream;
     stream << "﻿\r\n";
@@ -26,12 +59,17 @@ std::string generateSolutionFile(const CompileOptions& options)
         "VisualStudioVersion = 14.0.23107.0\r\n"
         "MinimumVisualStudioVersion = 10.0.40219.1\r\n";
 
+    constexpr auto entryTypeGuid = "8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942";
+
+    const auto relativePath = StringHelper::replace(
+        FileSystem::relative(vcxprojPath, solutionFilePath), "/", "\\");
+
     stream << StringHelper::format(
         "Project(\"%s\") = \"%s\", \"%s\", \"%s\"\r\n",
-        "{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}",
-        "MyConsoleApplication1",
-        "MyConsoleApplication1\\MyConsoleApplication1.vcxproj",
-        "{BB02C2E7-13FA-4B8E-961D-4461BF05E536}");
+        encodeGuid(entryTypeGuid).c_str(),
+        project.name.c_str(),
+        relativePath.c_str(),
+        encodeGuid(project.guid).c_str());
     stream << "EndProject\r\n";
 
     stream << "Global\r\n";
@@ -50,14 +88,14 @@ std::string generateSolutionFile(const CompileOptions& options)
 
     stream << "  GlobalSection(ProjectConfigurationPlatforms) = postSolution\r\n";
     const std::vector<std::string> variantsAndPlatforms = {
-        "{BB02C2E7-13FA-4B8E-961D-4461BF05E536}.Debug|x64.ActiveCfg = Debug|x64",
-        "{BB02C2E7-13FA-4B8E-961D-4461BF05E536}.Debug|x64.Build.0 = Debug|x64",
-        "{BB02C2E7-13FA-4B8E-961D-4461BF05E536}.Debug|x86.ActiveCfg = Debug|Win32",
-        "{BB02C2E7-13FA-4B8E-961D-4461BF05E536}.Debug|x86.Build.0 = Debug|Win32",
-        "{BB02C2E7-13FA-4B8E-961D-4461BF05E536}.Release|x64.ActiveCfg = Release|x64",
-        "{BB02C2E7-13FA-4B8E-961D-4461BF05E536}.Release|x64.Build.0 = Release|x64",
-        "{BB02C2E7-13FA-4B8E-961D-4461BF05E536}.Release|x86.ActiveCfg = Release|Win32",
-        "{BB02C2E7-13FA-4B8E-961D-4461BF05E536}.Release|x86.Build.0 = Release|Win32",
+        encodeGuid(project.guid) + ".Debug|x64.ActiveCfg = Debug|x64",
+        encodeGuid(project.guid) + ".Debug|x64.Build.0 = Debug|x64",
+        encodeGuid(project.guid) + ".Debug|x86.ActiveCfg = Debug|Win32",
+        encodeGuid(project.guid) + ".Debug|x86.Build.0 = Debug|Win32",
+        encodeGuid(project.guid) + ".Release|x64.ActiveCfg = Release|x64",
+        encodeGuid(project.guid) + ".Release|x64.Build.0 = Release|x64",
+        encodeGuid(project.guid) + ".Release|x86.ActiveCfg = Release|Win32",
+        encodeGuid(project.guid) + ".Release|x86.Build.0 = Release|Win32",
     };
     for (auto & v : variantsAndPlatforms) {
         stream << "    " << v << "\r\n";
@@ -168,13 +206,27 @@ std::string generateVcxprojFiltersFile(const CompileOptions& options)
 {
     std::stringstream stream;
 
+    std::vector<std::string> headerFiles;
+    std::vector<std::string> sourceFiles;
+
+    for (auto & source : options.sources) {
+        std::string ext;
+        std::tie(std::ignore, ext) = FileSystem::splitExtension(source);
+        if (ext == ".h" || ext == ".hh" || ext == ".hpp" || ext == ".hxx") {
+            headerFiles.push_back(source);
+        }
+        else if (ext == ".c" || ext == ".cc" || ext == ".cpp" || ext == ".cxx") {
+            sourceFiles.push_back(source);
+        }
+    }
+
     XmlWriter writer(stream);
     writer.startElement("Project",
         "ToolsVersion=\"4.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\"");
         writer.startElement("ItemGroup");
             writer.startElement("Filter", "Include=\"Source Files\"");
                 writer.startElement("UniqueIdentifier");
-                    writer.writeValue("{4FC737F1-C7A5-4376-A066-2A32D752A2FF}");
+                    writer.writeValue(encodeGuid("4FC737F1-C7A5-4376-A066-2A32D752A2FF"));
                 writer.endElement();
                 writer.startElement("Extensions");
                     writer.writeValue("cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx");
@@ -182,7 +234,7 @@ std::string generateVcxprojFiltersFile(const CompileOptions& options)
             writer.endElement();
             writer.startElement("Filter", "Include=\"Header Files\"");
                 writer.startElement("UniqueIdentifier");
-                    writer.writeValue("{93995380-89BD-4b04-88EB-625FBE52EBFB}");
+                    writer.writeValue(encodeGuid("93995380-89BD-4b04-88EB-625FBE52EBFB"));
                 writer.endElement();
                 writer.startElement("Extensions");
                     writer.writeValue("h;hh;hpp;hxx;hm;inl;inc;xsd");
@@ -190,7 +242,7 @@ std::string generateVcxprojFiltersFile(const CompileOptions& options)
             writer.endElement();
             writer.startElement("Filter", "Include=\"Resource Files\"");
                 writer.startElement("UniqueIdentifier");
-                    writer.writeValue("{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}");
+                    writer.writeValue(encodeGuid("67DA6AB6-F800-4c08-8B7A-83BB121AAD01"));
                 writer.endElement();
                 writer.startElement("Extensions");
                 writer.writeValue(
@@ -200,26 +252,36 @@ std::string generateVcxprojFiltersFile(const CompileOptions& options)
             writer.endElement();
         writer.endElement();
         writer.startElement("ItemGroup");
-            writer.startElement("ClInclude", "Include=\"targetver.h\"");
+        for (auto & source : headerFiles) {
+            writer.startElement("ClInclude", "Include=\"" + source + "\"");
                 writer.startElement("Filter");
                     writer.writeValue("Header Files");
                 writer.endElement();
             writer.endElement();
+        }
         writer.endElement();
         writer.startElement("ItemGroup");
-            writer.startElement("ClCompile", "Include=\"MyConsoleApplication1.cpp\"");
+        for (auto & source : sourceFiles) {
+            writer.startElement("ClCompile", "Include=\"" + source + "\"");
                 writer.startElement("Filter");
                     writer.writeValue("Source Files");
                 writer.endElement();
             writer.endElement();
+        }
         writer.endElement();
     writer.endElement();
     return stream.str();
 }
 
-std::string generateVcxprojFile(const CompileOptions& options)
+std::string generateVcxprojFile(const CompileOptions& options, const MSBuildProject& project)
 {
     std::stringstream stream;
+
+    struct ProjectConfiguration {
+        std::string Include;
+        std::string Configuration;
+        std::string Platform;
+    };
 
     XmlWriter writer(stream);
     writer.startElement("Project",
@@ -265,13 +327,13 @@ std::string generateVcxprojFile(const CompileOptions& options)
 
         writer.startElement("PropertyGroup", "Label=\"Globals\"");
             writer.startElement("ProjectGuid");
-                writer.writeValue("{BB02C2E7-13FA-4B8E-961D-4461BF05E536}");
+                writer.writeValue(encodeGuid(project.guid));
             writer.endElement();
             writer.startElement("Keyword");
                 writer.writeValue("Win32Proj");
             writer.endElement();
             writer.startElement("RootNamespace");
-                writer.writeValue("MyConsoleApplication1");
+                writer.writeValue(project.name);
             writer.endElement();
             writer.startElement("WindowsTargetPlatformVersion");
                 writer.writeValue("8.1");
@@ -528,12 +590,22 @@ std::string generateVcxprojFile(const CompileOptions& options)
             writer.endElement();
         writer.endElement();
 
-        writer.startElement("ItemGroup");
-            writer.writeElement("ClInclude", "Include=\"targetver.h\"");
-        writer.endElement();
-        writer.startElement("ItemGroup");
-            writer.writeElement("ClCompile", "Include=\"MyConsoleApplication1.cpp\"");
-        writer.endElement();
+        for (auto & source : options.sources) {
+            const auto fileType = [&] {
+                std::string ext;
+                std::tie(std::ignore, ext) = FileSystem::splitExtension(source);
+                if (ext == ".h" || ext == ".hh" || ext == ".hpp" || ext == ".hxx") {
+                    return "ClInclude";
+                }
+                else if (ext == ".c" || ext == ".cc" || ext == ".cpp" || ext == ".cxx") {
+                    return "ClCompile";
+                }
+                return "ClCompile";
+            }();
+            writer.startElement("ItemGroup");
+                writer.writeElement(fileType, "Include=\"" + source + "\"");
+            writer.endElement();
+        }
 
         writer.writeElement("Import", "Project=\"$(VCTargetsPath)\\Microsoft.Cpp.targets\"");
         writer.startElement("ImportGroup", "Label=\"ExtensionTargets\"");
@@ -555,14 +627,19 @@ GeneratorError MSBuild::generateMSBuildProject(const CompileOptions& options)
         FileSystem::createDirectories(projectDirectoryPath);
     }
 
+    MSBuildProject project;
+    project.guid = newGuid();
+    project.name = options.targetName;
+
+    const auto vcxprojPath = FileSystem::join(
+        projectDirectoryPath, options.targetName + ".vcxproj");
+
     {
-        const auto vcxprojPath = FileSystem::join(
-            projectDirectoryPath, options.targetName + ".vcxproj");
         std::ofstream stream(vcxprojPath, std::ios_base::out | std::ios_base::trunc);
         if (!stream) {
             return GeneratorError("Error: Cannot open.");
         }
-        stream << generateVcxprojFile(options);
+        stream << generateVcxprojFile(options, project);
     }
     {
         const auto vcxprojFilterPath = FileSystem::join(
@@ -580,7 +657,7 @@ GeneratorError MSBuild::generateMSBuildProject(const CompileOptions& options)
         if (!stream) {
             return GeneratorError("Error: Cannot open.");
         }
-        stream << generateSolutionFile(options);
+        stream << generateSolutionFile(options, project, solutionFilePath, vcxprojPath);
     }
 
     return {};
