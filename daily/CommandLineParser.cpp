@@ -30,6 +30,12 @@ std::string CommandLineParser::getHelpText() const
     constexpr auto indent = "  ";
     const std::string spaces = "                        ";
     std::stringstream stream;
+
+    if (!usageText.empty()) {
+        stream << "Usage: " << usageText << "\n\n";
+    }
+    stream << "Options:" << '\n';
+
     for (auto & hint : hints) {
         stream << indent;
         auto option = hint.name;
@@ -151,6 +157,11 @@ std::vector<std::string> CommandLineParser::getValues(const std::string& name) c
 std::vector<std::string> CommandLineParser::getPaths() const
 {
     return paths;
+}
+
+void CommandLineParser::setUsageText(const std::string& usage)
+{
+    this->usageText = usage;
 }
 
 } // namespace somera

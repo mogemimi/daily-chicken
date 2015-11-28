@@ -58,12 +58,15 @@ struct CommandLineParser {
 
     std::vector<std::string> getPaths() const;
 
+    void setUsageText(const std::string& usage);
+
 private:
     std::string executablePath;
     std::vector<CommandLineArgumentHint> hints;
     std::set<std::string> flags;
     std::vector<std::string> paths;
     std::stringstream errorMessage;
+    std::string usageText;
 };
 
 } // namespace somera

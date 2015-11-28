@@ -19,6 +19,7 @@ namespace somera {
 
 void setupCommandLineParser(CommandLineParser & parser)
 {
+    parser.setUsageText("hidamari [options ...] [build file ...]");
     parser.addArgument("-h", CommandLineArgumentType::Flag,
         "Display available options");
     parser.addArgument("-help", CommandLineArgumentType::Flag,
@@ -40,7 +41,6 @@ void setupCommandLineParser(CommandLineParser & parser)
         "Generate build files under the <dir>");
     parser.addArgument("-verbose", CommandLineArgumentType::JoinedOrSeparate,
         "Provide additional status output");
-
     parser.addArgument("-std=", CommandLineArgumentType::JoinedOrSeparate,
         "Language standard to compile for");
     parser.addArgument("-stdlib=", CommandLineArgumentType::JoinedOrSeparate,
@@ -106,11 +106,7 @@ int main(int argc, char *argv[])
         return 1;
     }
     if (parser.exists("-h") || parser.exists("-help")) {
-        std::cout
-            << "Usage: hidamari [options ...] [build file ...]" << std::endl
-            << std::endl
-            << "Options:" << std::endl
-            << parser.getHelpText() << std::endl;
+        std::cout << parser.getHelpText() << std::endl;
         return 0;
     }
     if (parser.getPaths().empty()) {
