@@ -12,38 +12,35 @@
 #include <fstream>
 
 using somera::CommandLineParser;
-using somera::CommandLineArgumentType;
 namespace FileSystem = somera::FileSystem;
 
 namespace somera {
 
 void setupCommandLineParser(CommandLineParser & parser)
 {
+    using somera::CommandLineArgumentType::Flag;
+    using somera::CommandLineArgumentType::JoinedOrSeparate;
     parser.setUsageText("hidamari [options ...] [build file ...]");
-    parser.addArgument("-h", CommandLineArgumentType::Flag,
-        "Display available options");
-    parser.addArgument("-help", CommandLineArgumentType::Flag,
-        "Display available options");
-    parser.addArgument("-I", CommandLineArgumentType::JoinedOrSeparate,
+    parser.addArgument("-h", Flag, "Display available options");
+    parser.addArgument("-help", Flag, "Display available options");
+    parser.addArgument("-I", JoinedOrSeparate,
         "Add directory to include search path");
-    parser.addArgument("-L", CommandLineArgumentType::JoinedOrSeparate,
+    parser.addArgument("-L", JoinedOrSeparate,
         "Add directory to library search path");
-    parser.addArgument("-l", CommandLineArgumentType::JoinedOrSeparate,
+    parser.addArgument("-l", JoinedOrSeparate,
         "Search the library when linking");
-    parser.addArgument("-fno-exceptions", CommandLineArgumentType::Flag,
-        "no-exceptions");
-    parser.addArgument("-generator=", CommandLineArgumentType::JoinedOrSeparate,
+    parser.addArgument("-fno-exceptions", Flag, "no-exceptions");
+    parser.addArgument("-generator=", JoinedOrSeparate,
         "The output formats to generate. Supported format\n"
         "are \"xcode\", \"msbuild\", \"cmake\", \"gyp\", or \"gn\".");
-    parser.addArgument("-o", CommandLineArgumentType::JoinedOrSeparate,
-        "Write output to <file>");
-    parser.addArgument("-generator-output=", CommandLineArgumentType::JoinedOrSeparate,
+    parser.addArgument("-o", JoinedOrSeparate, "Write output to <file>");
+    parser.addArgument("-generator-output=", JoinedOrSeparate,
         "Generate build files under the <dir>");
-    parser.addArgument("-verbose", CommandLineArgumentType::JoinedOrSeparate,
+    parser.addArgument("-verbose", JoinedOrSeparate,
         "Provide additional status output");
-    parser.addArgument("-std=", CommandLineArgumentType::JoinedOrSeparate,
+    parser.addArgument("-std=", JoinedOrSeparate,
         "Language standard to compile for");
-    parser.addArgument("-stdlib=", CommandLineArgumentType::JoinedOrSeparate,
+    parser.addArgument("-stdlib=", JoinedOrSeparate,
         "C++ standard library to use");
 }
 

@@ -4,53 +4,16 @@
 #include "SlackClient.h"
 #include "iTunesNowPlaying.h"
 #include "TerminalHelper.h"
+#include "daily/CommandLineParser.h"
 #include "daily/StringHelper.h"
 #include <iostream>
 #include <thread>
 #include <fstream>
 #include <regex>
 
+using somera::CommandLineParser;
+
 namespace {
-
-struct CommandLineParser {
-    CommandLineParser(int argc, char *argv[])
-    {
-        assert(argc > 0);
-        assert(argv != nullptr);
-        if (argc >= 1) {
-            executablePath = argv[0];
-        }
-        std::string key;
-        for (int i = 1; i < argc; i++) {
-            if (key.empty() || (*argv[i]) == '-') {
-                key = argv[i];
-                arguments[key];
-            }
-            else {
-                arguments[key] = argv[i];
-            }
-        }
-    }
-
-    bool exists(const std::string& flag) const
-    {
-        auto iter = arguments.find(flag);
-        return iter != std::end(arguments);
-    }
-
-    std::string get(const std::string& flag) const
-    {
-        auto iter = arguments.find(flag);
-        if (iter != std::end(arguments)) {
-            return iter->second;
-        }
-        return "";
-    }
-
-private:
-    std::string executablePath;
-    std::map<std::string, std::string> arguments;
-};
 
 void chatNowPlayingMusic(somera::SlackClient & slack, const std::string& channelName)
 {
@@ -162,44 +125,52 @@ void historyToMarkdown(
     }
 }
 
-void showHelp()
+void setupCommandLineParser(CommandLineParser & parser)
 {
-    std::printf("%*s %s\n", 18,
-        "-h", "Show help documents");
-    std::printf("%*s %s\n", 18,
-        "-help", "Show help documents");
-    std::printf("%*s %s\n", 18,
-        "-token-from-env", "Get the access token from environment path");
-    std::printf("%*s %s\n", 18,
-        "-token-from-file", "Get the access token from file");
+    using somera::CommandLineArgumentType::Flag;
+    using somera::CommandLineArgumentType::JoinedOrSeparate;
+    parser.setUsageText("slackbot [options ...]"
+        "\n\n"
+        "# ./slackbot -nowplaying -channel general\n"
+        "# ./slackbot -history-markdown -channel general\n"
+        "# ./slackbot -history-markdown -channel general -file readme.md\n"
+        "# ./slackbot -api-test\n"
+        "# ./slackbot -auth-test");
 
-    std::printf("%*s %s\n", 18,
-        "-nowplaying", "Chat now playing music.");
-    std::printf("%*s %s\n", 18,
-        "-history-markdown", "Write channel history to markdown file");
-    std::printf("%*s %s\n", 18,
-        "-api-test", "Call 'api.test' method");
-    std::printf("%*s %s\n", 18,
-        "-auth-test", "Call 'auth.test' method");
+    parser.addArgument("-h", Flag, "Display available options");
+    parser.addArgument("-help", Flag, "Display available options");
+    parser.addArgument("-token-from-env", Flag,
+        "Get the access token from environment path");
+    parser.addArgument("-token-from-file", Flag,
+        "Get the access token from file");
 
-    std::cout
-        << std::endl
-        << "### Example ###" << std::endl
-        << "# ./slackbot -nowplaying -channel general" << std::endl
-        << "# ./slackbot -history-markdown -channel general" << std::endl
-        << "# ./slackbot -history-markdown -channel general -file readme.md" << std::endl
-        << "# ./slackbot -api-test" << std::endl
-        << "# ./slackbot -auth-test" << std::endl;
+    parser.addArgument("-channel", JoinedOrSeparate, "Post to channel name");
+    parser.addArgument("-nowplaying", Flag,
+        "Chat now playing music");
+    parser.addArgument("-file", JoinedOrSeparate, "Write to file");
+    parser.addArgument("-history-markdown", Flag,
+        "Write channel history to markdown file");
+
+    parser.addArgument("-api-test", Flag,
+        "Call 'api.test' method");
+    parser.addArgument("-auth-test", Flag,
+        "Call 'auth.test' method");
 }
 
 } // unnamed namespace
 
 int main(int argc, char *argv[])
 {
-    CommandLineParser parser(argc, argv);
+    CommandLineParser parser;
+    setupCommandLineParser(parser);
+    parser.parse(argc, argv);
 
+    if (parser.hasParseError()) {
+        std::cerr << parser.getErrorMessage() << std::endl;
+        return 1;
+    }
     if (parser.exists("-h") || parser.exists("-help")) {
-        showHelp();
+        std::cout << parser.getHelpText() << std::endl;
         return 0;
     }
 
@@ -235,23 +206,31 @@ int main(int argc, char *argv[])
     slack.login();
 
     if (parser.exists("-nowplaying")) {
-        std::string channel = parser.get("-channel");
-        if (!slack.getChannelByName(channel)) {
+        auto channel = parser.getValue("-channel");
+        if (!channel) {
+            std::printf("Invalid channel name");
+            return 1;
+        }
+        if (!slack.getChannelByName(*channel)) {
             std::printf("Channot find channel.");
         }
-        chatNowPlayingMusic(slack, channel);
+        chatNowPlayingMusic(slack, *channel);
     }
     else if (parser.exists("-history-markdown")) {
-        std::string channel = parser.get("-channel");
-        if (!slack.getChannelByName(channel)) {
+        auto channel = parser.getValue("-channel");
+        if (!channel) {
+            std::printf("Invalid channel name");
+            return 1;
+        }
+        if (!slack.getChannelByName(*channel)) {
             std::printf("Channot find channel.");
         }
 
-        std::string outputFile = channel + ".md";
-        if (parser.exists("-file")) {
-            outputFile = parser.get("-file");
+        std::string outputFile = *channel + ".md";
+        if (auto fileName = parser.getValue("-file")) {
+            outputFile = *fileName;
         }
-        historyToMarkdown(slack, channel, outputFile);
+        historyToMarkdown(slack, *channel, outputFile);
     }
     else if (parser.exists("-api-test")) {
         slack.apiTest([](const std::string& json) {
@@ -264,7 +243,7 @@ int main(int argc, char *argv[])
         });
     }
     else {
-        showHelp();
+        std::cout << parser.getHelpText() << std::endl;
     }
     return 0;
 }
