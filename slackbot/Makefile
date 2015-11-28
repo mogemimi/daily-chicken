@@ -2,16 +2,11 @@ HEADERS = *.h ../daily/*.h
 SOURCES = \
 	../daily/*.cpp \
 	HttpUtility.cpp \
-	HttpUtility.h \
 	HttpService.cpp \
-	HttpService.h \
 	iTunesNowPlaying.cpp \
-	iTunesNowPlaying.h \
 	main.cpp \
 	SlackClient.cpp \
-	SlackClient.h \
-	TerminalHelper.cpp \
-	TerminalHelper.h
+	TerminalHelper.cpp
 
 xcode:
 	./../bin/hidamari -generator=xcode \
@@ -21,6 +16,7 @@ xcode:
 		-llibcurl.tbd \
 		-I.. \
 		-Irapidjson/include \
+		$(HEADERS) \
 		$(SOURCES) \
 		main.cpp
 	@xcodebuild -project slackbot.xcodeproj -configuration Release
