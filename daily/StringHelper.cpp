@@ -50,7 +50,14 @@ bool StringHelper::startWith(const std::string& text, const std::string& prefix)
 std::string StringHelper::toLower(const std::string& source)
 {
     std::string output = source;
-    std::transform(output.begin(), output.end(), output.begin(), ::towlower);
+    std::transform(output.begin(), output.end(), output.begin(), ::tolower);
+    return std::move(output);
+}
+
+std::string StringHelper::toUpper(const std::string& source)
+{
+    std::string output = source;
+    std::transform(output.begin(), output.end(), output.begin(), ::toupper);
     return std::move(output);
 }
 

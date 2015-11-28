@@ -11,6 +11,8 @@ bool startWith(const std::string& source, const std::string& prefix);
 
 std::string toLower(const std::string& source);
 
+std::string toUpper(const std::string& source);
+
 std::string replace(
     const std::string& source,
     const std::string& from,

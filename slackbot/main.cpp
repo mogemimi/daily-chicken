@@ -4,29 +4,13 @@
 #include "SlackClient.h"
 #include "iTunesNowPlaying.h"
 #include "TerminalHelper.h"
+#include "daily/StringHelper.h"
 #include <iostream>
 #include <thread>
 #include <fstream>
 #include <regex>
 
 namespace {
-namespace StringHelper {
-
-std::string replace(const std::string& source, const std::string& from, const std::string& to)
-{
-    if (from.empty()) {
-        return source;
-    }
-    auto result = source;
-    std::string::size_type start = 0;
-    while ((start = result.find(from, start)) != std::string::npos) {
-        result.replace(start, from.length(), to);
-        start += to.length();
-    }
-    return std::move(result);
-}
-
-} // namespace StringHelper
 
 struct CommandLineParser {
     CommandLineParser(int argc, char *argv[])
