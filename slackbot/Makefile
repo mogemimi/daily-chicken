@@ -20,7 +20,7 @@ xcode:
 		-std=c++14 \
 		-stdlib=libc++ \
 		-lcurl \
-		-I../somerachan/src \
+		-I.. \
 		-Irapidjson/include \
 		$(SOURCES) \
 		main.cpp

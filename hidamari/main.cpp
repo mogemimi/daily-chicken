@@ -69,7 +69,9 @@ std::string fileToString(const std::string& source)
 void sortByName(std::vector<std::string>& names)
 {
     std::sort(std::begin(names), std::end(names),
-        [](const auto& a, const auto& b){ return a < b; });
+        [](const auto& a, const auto& b) {
+            return StringHelper::toLower(a) < StringHelper::toLower(b);
+        });
     names.erase(
         std::unique(std::begin(names), std::end(names)), std::end(names));
 }
