@@ -189,6 +189,19 @@ struct PBXGroup final : public XcodeObject {
         }
         return std::move(result);
     }
+
+    void visit(const std::function<void(std::shared_ptr<PBXFileReference>)>& func) const
+    {
+        assert(func);
+        for (auto & child : children) {
+            if (auto file = std::dynamic_pointer_cast<PBXFileReference>(child)) {
+                func(file);
+            }
+            else if (auto group = std::dynamic_pointer_cast<PBXGroup>(child)) {
+                group->visit(func);
+            }
+        }
+    }
 };
 
 struct PBXNativeTarget final : public XcodeObject {
@@ -608,7 +621,29 @@ std::shared_ptr<XcodeProject> createXcodeProject(const CompileOptions& options)
         fileRef->lastKnownFileType = findLastKnownFileType(source);
         fileRef->path = source;
         fileRef->sourceTree = "\"<group>\"";
-        sourceGroup->children.push_back(fileRef);
+
+        auto getGroup = [&]() -> std::shared_ptr<PBXGroup> {
+            auto directory = std::get<0>(FileSystem::split(source));
+            if (directory.empty()) {
+                return sourceGroup;
+            }
+            auto iter = std::find_if(
+                std::begin(sourceGroup->children),
+                std::end(sourceGroup->children),
+                [&directory](const std::shared_ptr<XcodeObject>& object) {
+                    auto group = std::dynamic_pointer_cast<PBXGroup>(object);
+                    return group && group->name && (*group->name == directory);
+                });
+            if (iter != std::end(sourceGroup->children)) {
+                return std::dynamic_pointer_cast<PBXGroup>(*iter);
+            }
+            auto group = std::make_shared<PBXGroup>();
+            group->name = directory;
+            sourceGroup->children.push_back(group);
+            return std::move(group);
+        };
+        const auto group = getGroup();
+        group->children.push_back(fileRef);
     }
 
     const auto buildConfigurationDebug = [&] {
@@ -674,15 +709,14 @@ std::shared_ptr<XcodeProject> createXcodeProject(const CompileOptions& options)
         auto phase = std::make_shared<PBXSourcesBuildPhase>();
         phase->buildActionMask = "2147483647";
         phase->runOnlyForDeploymentPostprocessing = "0";
-        for (auto & child : sourceGroup->children) {
-            auto source = std::dynamic_pointer_cast<PBXFileReference>(child);
-            if (!source || isHeaderFile(source->path)) {
-                continue;
+        sourceGroup->visit([&](std::shared_ptr<PBXFileReference> source) {
+            if (isHeaderFile(source->path)) {
+                return;
             }
             auto file = std::make_shared<PBXBuildFile>();
             file->fileRef = source;
             phase->files.push_back(std::move(file));
-        }
+        });
         return std::move(phase);
     }();
 
@@ -749,15 +783,18 @@ std::shared_ptr<XcodeProject> createXcodeProject(const CompileOptions& options)
     xcodeProject->archiveVersion = "1";
     xcodeProject->objectVersion = "46";
     xcodeProject->rootObject = pbxProject;
-    for (auto & child : sourceGroup->children) {
-        if (auto source = std::dynamic_pointer_cast<PBXFileReference>(child)) {
-            xcodeProject->fileReferences.push_back(source);
-        }
-    }
+    sourceGroup->visit([&](std::shared_ptr<PBXFileReference> source) {
+        xcodeProject->fileReferences.push_back(source);
+    });
     xcodeProject->fileReferences.push_back(productReference);
     xcodeProject->groups.push_back(sourceGroup);
     xcodeProject->groups.push_back(productsGroup);
     xcodeProject->groups.push_back(mainGroup);
+    for (auto & child : sourceGroup->children) {
+        if (auto group = std::dynamic_pointer_cast<PBXGroup>(child)) {
+            xcodeProject->groups.push_back(group);
+        }
+    }
     xcodeProject->buildConfigurations.push_back(buildConfigurationDebug);
     xcodeProject->buildConfigurations.push_back(buildConfigurationRelease);
     xcodeProject->buildConfigurations.push_back(buildConfigurationTargetDebug);
@@ -790,6 +827,11 @@ std::shared_ptr<XcodeProject> createXcodeProject(const CompileOptions& options)
     return std::move(xcodeProject);
 }
 
+std::string getFilename(const std::string& path)
+{
+    return std::get<1>(FileSystem::split(path));
+}
+
 void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
 {
     constexpr bool isSingleLine = true;
@@ -800,11 +842,11 @@ void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
             auto & buildFile = *f;
             printer.beginKeyValue(stringifyUUID(
                 buildFile.uuid,
-                buildFile.fileRef->path + " in " + phase->comments()));
+                getFilename(buildFile.fileRef->path) + " in " + phase->comments()));
                 printer.beginObject(isSingleLine);
                 printer.printKeyValue("isa", buildFile.isa());
                 printer.printKeyValue("fileRef",
-                    stringifyUUID(buildFile.fileRef->uuid, buildFile.fileRef->path));
+                    stringifyUUID(buildFile.fileRef->uuid, getFilename(buildFile.fileRef->path)));
                 printer.endObject();
             printer.endKeyValue();
         }
@@ -841,6 +883,9 @@ void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
                 }
                 if (fileRef.lastKnownFileType) {
                     printer.printKeyValue("lastKnownFileType", *fileRef.lastKnownFileType);
+                }
+                if (!FileSystem::getDirectoryName(fileRef.path).empty()) {
+                    printer.printKeyValue("name", FileSystem::getBaseName(fileRef.path));
                 }
                 printer.printKeyValue("path", fileRef.path);
                 printer.printKeyValue("sourceTree", fileRef.sourceTree);
