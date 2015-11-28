@@ -340,7 +340,7 @@ FileSystem::splitExtension(const std::string& path)
 std::string FileSystem::normalize(const std::string& path)
 {
     auto fullPath = path;
-    if (fullPath.front() != '/') { // TODO: Windows's drive (ex. 'C:\' drive)
+    if (fullPath.front() != '/') { // TODO: Windows's drive (ex. 'C:' drive) and '\\[server name]'
         // NOTE: 'path' is not full path.
         fullPath = FileSystem::join(getCurrentDirectory(), fullPath);
     }

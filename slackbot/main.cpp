@@ -153,8 +153,8 @@ void historyToMarkdown(
         // NOTE: Insertion linebreak for markdown's list
         std::regex re(R"((^[^\-][^\n]*\n)(\-\s[^\n]+))");
         auto result = std::regex_replace(message.text, re, "$1\n$2");
-        result = StringHelper::replace(result, "&gt;", ">");
-        result = StringHelper::replace(result, "&lt;", "<");
+        result = somera::StringHelper::replace(result, "&gt;", ">");
+        result = somera::StringHelper::replace(result, "&lt;", "<");
 
         stream << result << std::endl;
         stream << std::endl;

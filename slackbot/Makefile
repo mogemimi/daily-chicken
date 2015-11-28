@@ -1,4 +1,6 @@
+HEADERS = *.h ../daily/*.h
 SOURCES = \
+	../daily/*.cpp \
 	HttpUtility.cpp \
 	HttpUtility.h \
 	HttpService.cpp \
@@ -9,17 +11,14 @@ SOURCES = \
 	SlackClient.cpp \
 	SlackClient.h \
 	TerminalHelper.cpp \
-	TerminalHelper.h \
-	../daily/SubprocessHelper.cpp \
-	../daily/SubprocessHelper.h \
-	../daily/Optional.h
+	TerminalHelper.h
 
 xcode:
 	./../bin/hidamari -generator=xcode \
 		-o slackbot \
 		-std=c++14 \
 		-stdlib=libc++ \
-		-lcurl \
+		-llibcurl.tbd \
 		-I.. \
 		-Irapidjson/include \
 		$(SOURCES) \

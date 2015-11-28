@@ -272,7 +272,7 @@ struct PBXCopyFilesBuildPhase final : public XcodeBuildPhase {
 struct PBXFrameworksBuildPhase final : public XcodeBuildPhase {
     std::string isa() const noexcept override { return "PBXFrameworksBuildPhase"; }
     std::string buildActionMask;
-    std::vector<std::string> files;
+    std::vector<std::shared_ptr<PBXBuildFile>> files;
     std::string runOnlyForDeploymentPostprocessing;
 
     std::string comments() const noexcept override { return "Frameworks"; }
@@ -285,18 +285,20 @@ struct PBXSourcesBuildPhase final : public XcodeBuildPhase {
     std::string runOnlyForDeploymentPostprocessing;
 
     std::string comments() const noexcept override { return "Sources"; }
-
-    std::vector<std::string> getFileListString() const
-    {
-        std::vector<std::string> result;
-        for (auto & buildFile : files) {
-            result.push_back(stringifyUUID(
-                buildFile->uuid,
-                buildFile->fileRef->path + " in " + comments()));
-        }
-        return std::move(result);
-    }
 };
+
+template <class BuildPhase>
+std::vector<std::string> toFileListString(const BuildPhase& phase)
+{
+    static_assert(std::is_base_of<XcodeBuildPhase, BuildPhase>::value, "");
+    std::vector<std::string> result;
+    for (auto & buildFile : phase.files) {
+        result.push_back(stringifyUUID(
+            buildFile->uuid,
+            buildFile->fileRef->path + " in " + phase.comments()));
+    }
+    return std::move(result);
+}
 
 struct XCBuildConfiguration final : public XcodeObject {
     std::string isa() const noexcept override { return "XCBuildConfiguration"; }
@@ -515,16 +517,32 @@ std::string findLastKnownFileType(const std::string& path) noexcept
     if (ext == "h") {
         return "sourcecode.c.h";
     }
-    if (ext == "sourcecode.swift") {
-        return "sourcecode.c.h";
+    if (ext == "swift") {
+        return "sourcecode.swift";
+    }
+    if (ext == "tbd") {
+        return "sourcecode.text-based-dylib-definition";
+    }
+    if (ext == "dylib") {
+        return "compiled.mach-o.dylib";
+    }
+    if (ext == "a") {
+        return "archive.ar";
     }
     return "sourcecode";
 }
 
-bool isHeaderFile(const std::string& path) noexcept
+bool isSourceFile(const std::string& path) noexcept
 {
     auto ext = std::get<1>(FileSystem::splitExtension(path));
-    return (ext == "h" || ext == "hh" || ext == "hpp" || ext == "hxx");
+    return (ext == "c" || ext == "cc" || ext == "cpp" || ext == "cxx"
+        || ext == "m" || ext == "mm" || ext == "swift");
+}
+
+template <typename C, typename T>
+auto find(C & container, T & value) -> decltype(std::begin(container))
+{
+    return std::find(std::begin(container), std::end(container), value);
 }
 
 void setDefaultBuildConfig(XCBuildConfiguration& config)
@@ -588,9 +606,16 @@ void setSearchPathsToBuildConfig(
 
 std::shared_ptr<XcodeProject> createXcodeProject(const CompileOptions& options)
 {
+    const bool hasFrameworks = !options.libraries.empty();
+
     const auto sourceGroup = [&] {
         auto group = std::make_shared<PBXGroup>();
         group->name = "Source";
+        return std::move(group);
+    }();
+    const auto frameworksGroup = [&] {
+        auto group = std::make_shared<PBXGroup>();
+        group->name = "Frameworks";
         return std::move(group);
     }();
     const auto productsGroup = [&] {
@@ -601,6 +626,9 @@ std::shared_ptr<XcodeProject> createXcodeProject(const CompileOptions& options)
     const auto mainGroup = [&] {
         auto group = std::make_shared<PBXGroup>();
         group->children.push_back(sourceGroup);
+        if (hasFrameworks) {
+            group->children.push_back(frameworksGroup);
+        }
         group->children.push_back(productsGroup);
         return std::move(group);
     }();
@@ -643,6 +671,20 @@ std::shared_ptr<XcodeProject> createXcodeProject(const CompileOptions& options)
         };
         const auto group = getGroup();
         group->children.push_back(fileRef);
+    }
+
+    for (auto & library : options.libraries) {
+        auto fileRef = std::make_shared<PBXFileReference>();
+        fileRef->lastKnownFileType = findLastKnownFileType(library);
+        if ("tbd" == std::get<1>(FileSystem::splitExtension(library))) {
+            ///@todo This code is bad.
+            fileRef->path = FileSystem::join("usr/lib/", library);
+            fileRef->sourceTree = "SDKROOT";
+        } else {
+            fileRef->path = library;
+            fileRef->sourceTree = "\"<group>\"";
+        }
+        frameworksGroup->children.push_back(fileRef);
     }
 
     const auto buildConfigurationDebug = [&] {
@@ -709,12 +751,11 @@ std::shared_ptr<XcodeProject> createXcodeProject(const CompileOptions& options)
         phase->buildActionMask = "2147483647";
         phase->runOnlyForDeploymentPostprocessing = "0";
         sourceGroup->visit([&](std::shared_ptr<PBXFileReference> source) {
-            if (isHeaderFile(source->path)) {
-                return;
+            if (isSourceFile(source->path)) {
+                auto file = std::make_shared<PBXBuildFile>();
+                file->fileRef = source;
+                phase->files.push_back(std::move(file));
             }
-            auto file = std::make_shared<PBXBuildFile>();
-            file->fileRef = source;
-            phase->files.push_back(std::move(file));
         });
         return std::move(phase);
     }();
@@ -723,6 +764,11 @@ std::shared_ptr<XcodeProject> createXcodeProject(const CompileOptions& options)
         auto phase = std::make_shared<PBXFrameworksBuildPhase>();
         phase->buildActionMask = "2147483647";
         phase->runOnlyForDeploymentPostprocessing = "0";
+        frameworksGroup->visit([&](std::shared_ptr<PBXFileReference> source) {
+            auto file = std::make_shared<PBXBuildFile>();
+            file->fileRef = source;
+            phase->files.push_back(std::move(file));
+        });
         return std::move(phase);
     }();
 
@@ -785,8 +831,14 @@ std::shared_ptr<XcodeProject> createXcodeProject(const CompileOptions& options)
     sourceGroup->visit([&](std::shared_ptr<PBXFileReference> source) {
         xcodeProject->fileReferences.push_back(source);
     });
+    frameworksGroup->visit([&](std::shared_ptr<PBXFileReference> source) {
+        xcodeProject->fileReferences.push_back(source);
+    });
     xcodeProject->fileReferences.push_back(productReference);
     xcodeProject->groups.push_back(sourceGroup);
+    if (hasFrameworks) {
+        xcodeProject->groups.push_back(frameworksGroup);
+    }
     xcodeProject->groups.push_back(productsGroup);
     xcodeProject->groups.push_back(mainGroup);
     for (auto & child : sourceGroup->children) {
@@ -836,12 +888,14 @@ void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
     constexpr bool isSingleLine = true;
 
     printer.beginSection("PBXBuildFile");
-    for (auto & phase : xcodeProject.sourcesBuildPhases) {
-        for (auto & f : phase->files) {
+    auto printPBXBuildFile = [&](
+        const std::vector<std::shared_ptr<PBXBuildFile>>& files,
+        const std::string& comments) {
+        for (auto & f : files) {
             auto & buildFile = *f;
             printer.beginKeyValue(stringifyUUID(
                 buildFile.uuid,
-                getFilename(buildFile.fileRef->path) + " in " + phase->comments()));
+                getFilename(buildFile.fileRef->path) + " in " + comments));
                 printer.beginObject(isSingleLine);
                 printer.printKeyValue("isa", buildFile.isa());
                 printer.printKeyValue("fileRef",
@@ -849,6 +903,12 @@ void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
                 printer.endObject();
             printer.endKeyValue();
         }
+    };
+    for (auto & phase : xcodeProject.sourcesBuildPhases) {
+        printPBXBuildFile(phase->files, phase->comments());
+    }
+    for (auto & phase : xcodeProject.frameworkBuildPhases) {
+        printPBXBuildFile(phase->files, phase->comments());
     }
     printer.endSection();
 
@@ -899,7 +959,7 @@ void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
             printer.beginObject();
                 printer.printKeyValue("isa", phase->isa());
                 printer.printKeyValue("buildActionMask", phase->buildActionMask);
-                printer.printKeyValue("files", phase->files);
+                printer.printKeyValue("files", toFileListString(*phase));
                 printer.printKeyValue("runOnlyForDeploymentPostprocessing",
                     phase->runOnlyForDeploymentPostprocessing);
             printer.endObject();
@@ -1013,7 +1073,7 @@ void printObjects(XcodePrinter & printer, const XcodeProject& xcodeProject)
             printer.beginObject();
                 printer.printKeyValue("isa", phase->isa());
                 printer.printKeyValue("buildActionMask", phase->buildActionMask);
-                printer.printKeyValue("files", phase->getFileListString());
+                printer.printKeyValue("files", toFileListString(*phase));
                 printer.printKeyValue("runOnlyForDeploymentPostprocessing",
                     phase->runOnlyForDeploymentPostprocessing);
             printer.endObject();
