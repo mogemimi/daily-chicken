@@ -1,10 +1,10 @@
 // Copyright (c) 2015 mogemimi. Distributed under the MIT license.
 
 #include "XcodeProject.h"
-#include "FileSystem.h"
-#include "StringHelper.h"
-#include "Any.h"
-#include "../somerachan/src/optional.h"
+#include "daily/Any.h"
+#include "daily/FileSystem.h"
+#include "daily/Optional.h"
+#include "daily/StringHelper.h"
 #include <cassert>
 #include <ctime>
 #include <fstream>

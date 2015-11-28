@@ -15,6 +15,7 @@
       'type': 'executable',
       'include_dirs': [
         'src',
+        '..',
       ],
       'sources': [
         'src/main.cpp',
@@ -22,7 +23,6 @@
         'src/consolecolor.h',
         'src/editdistance.cpp',
         'src/editdistance.h',
-        'src/optional.h',
         'src/spellcheck.h',
         'src/utf8.cpp',
         'src/utf8.h',
@@ -32,6 +32,7 @@
         'src/wordsegmenter.h',
         'src/thirdparty/ConvertUTF.c',
         'src/thirdparty/ConvertUTF.h',
+        '../daily/Optional.h',
       ],
       'conditions': [
         ['OS == "win"', {

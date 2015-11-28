@@ -1,7 +1,7 @@
 // Copyright (c) 2015 mogemimi. Distributed under the MIT license.
 
 #include "worddiff.h"
-#include "optional.h"
+#include "daily/Optional.h"
 #include <algorithm>
 #include <cassert>
 #include <utility>

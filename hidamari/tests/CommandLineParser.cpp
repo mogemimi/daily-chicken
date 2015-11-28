@@ -1,8 +1,8 @@
 // Copyright (c) 2015 mogemimi. Distributed under the MIT license.
 
 #include "CommandLineParser.h"
-#include "FileSystem.h"
-#include "StringHelper.h"
+#include "daily/FileSystem.h"
+#include "daily/StringHelper.h"
 #include <gtest/iutest_switch.hpp>
 
 using namespace somera;

@@ -1,7 +1,7 @@
 // Copyright (c) 2015 mogemimi. Distributed under the MIT license.
 
 #include "CommandLineParser.h"
-#include "StringHelper.h"
+#include "daily/StringHelper.h"
 #include <cassert>
 #include <utility>
 #include <algorithm>

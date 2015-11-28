@@ -1,7 +1,7 @@
 // Copyright (c) 2015 mogemimi. Distributed under the MIT license.
 
 #include "iTunesNowplaying.h"
-#include "../hidamari/SubprocessHelper.h"
+#include "daily/SubprocessHelper.h"
 #include <sstream>
 #include <utility>
 #ifdef __APPLE_CC__

@@ -10,9 +10,9 @@ SOURCES = \
 	SlackClient.h \
 	TerminalHelper.cpp \
 	TerminalHelper.h \
-	../hidamari/SubprocessHelper.cpp \
-	../hidamari/SubprocessHelper.h \
-	../somerachan/src/optional.h
+	../daily/SubprocessHelper.cpp \
+	../daily/SubprocessHelper.h \
+	../daily/Optional.h
 
 xcode:
 	./../bin/hidamari -generator=xcode \

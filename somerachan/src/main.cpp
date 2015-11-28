@@ -1,9 +1,9 @@
 #include "consolecolor.h"
 #include "editdistance.h"
-#include "optional.h"
 #include "spellcheck.h"
 #include "worddiff.h"
 #include "wordsegmenter.h"
+#include "daily/Optional.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wshadow"

@@ -1,18 +1,15 @@
 CXX = clang++
-HEADERS = *.h
+HEADERS = *.h ../daily/*.h
 SOURCES = \
-	CommandLineParser.cpp \
-	FileSystem.cpp \
+	../daily/*.cpp \
 	MSBuild.cpp \
-	XcodeProject.cpp \
-	StringHelper.cpp \
-	SubprocessHelper.cpp
+	XcodeProject.cpp
 
 bootstrap:
 	$(CXX) -o hidamari \
 		-std=c++14 \
 		-stdlib=libc++ \
-		-I../somerachan/src \
+		-I.. \
 		$(SOURCES) \
 		main.cpp
 	@mkdir -p ../bin
@@ -23,7 +20,7 @@ xcode:
 		-o hidamari \
 		-std=c++14 \
 		-stdlib=libc++ \
-		-I../somerachan/src \
+		-I.. \
 		$(HEADERS) \
 		$(SOURCES) \
 		main.cpp
@@ -36,7 +33,7 @@ test:
 		-o HidamariTest \
 		-std=c++14 \
 		-stdlib=libc++ \
-		-I../somerachan/src \
+		-I.. \
 		-I../somerachan/iutest/include \
 		$(HEADERS) \
 		$(SOURCES) \
