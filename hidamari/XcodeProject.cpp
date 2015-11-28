@@ -20,15 +20,14 @@ namespace {
 
 std::string generateXcodeID() noexcept
 {
-    std::random_device device;
-    static uint32_t hash1 = device();
+    std::mt19937 random(std::random_device{}());
+    static uint32_t hash1 = random();
     hash1 += 1;
     ::time_t timeRaw;
     ::time(&timeRaw);
     static uint32_t hash2 = static_cast<uint32_t>(timeRaw);
-    std::uniform_int_distribution<uint32_t> dist(0, 16);
-    hash2 += dist(device);
-    static const uint32_t hash3 = device();
+    hash2 += 1;
+    static const uint32_t hash3 = random();
     std::string id = StringHelper::format("%08X%08X%08X", hash1, hash2, hash3);
     return id;
 }

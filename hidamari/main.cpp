@@ -38,6 +38,8 @@ void setupCommandLineParser(CommandLineParser & parser)
         "Write output to <file>");
     parser.addArgument("-generator-output=", CommandLineArgumentType::JoinedOrSeparate,
         "Generate build files under the <dir>");
+    parser.addArgument("-verbose", CommandLineArgumentType::JoinedOrSeparate,
+        "Provide additional status output");
 
     parser.addArgument("-std=", CommandLineArgumentType::JoinedOrSeparate,
         "Language standard to compile for");
@@ -92,6 +94,13 @@ int main(int argc, char *argv[])
     setupCommandLineParser(parser);
     parser.parse(argc, argv);
 
+    auto printVerbose = [&](const std::string& text) {
+        static const bool verbose = parser.exists("-verbose");
+        if (verbose) {
+            std::cout << text << std::endl;
+        }
+    };
+
     if (parser.hasParseError()) {
         std::cerr << parser.getErrorMessage() << std::endl;
         return 1;
@@ -112,19 +121,19 @@ int main(int argc, char *argv[])
     somera::CompileOptions options;
 
     for (auto & path : parser.getValues("-I")) {
-        std::cout << "[-I] " << path << std::endl;
+        printVerbose("[-I] "+ path);
         options.includeSearchPaths.push_back(path);
     }
     for (auto & path : parser.getValues("-L")) {
-        std::cout << "[-L] " << path << std::endl;
+        printVerbose("[-L] " + path);
         options.librarySearchPaths.push_back(path);
     }
     for (auto & path : parser.getValues("-l")) {
-        std::cout << "[-l] " << path << std::endl;
+        printVerbose("[-l] " + path);
         options.libraries.push_back(path);
     }
     for (auto & path : parser.getPaths()) {
-        std::cout << "[Path] " << path << std::endl;
+        printVerbose("[Path] " + path);
         options.sources.push_back(path);
     }
 
@@ -147,19 +156,19 @@ int main(int argc, char *argv[])
 
     for (auto & path : options.includeSearchPaths) {
         path = FileSystem::relative(path, options.generatorOutputDirectory);
-        std::cout << "[Path (Relative)] " << path << std::endl;
+        printVerbose("[-I (Relative)] " + path);
     }
     for (auto & path : options.librarySearchPaths) {
         path = FileSystem::relative(path, options.generatorOutputDirectory);
-        std::cout << "[Path (Relative)] " << path << std::endl;
+        printVerbose("[-L (Relative)] " + path);
     }
     for (auto & path : options.libraries) {
         path = FileSystem::relative(path, options.generatorOutputDirectory);
-        std::cout << "[Path (Relative)] " << path << std::endl;
+        printVerbose("[-l (Relative)] " + path);
     }
     for (auto & path : options.sources) {
         path = FileSystem::relative(path, options.generatorOutputDirectory);
-        std::cout << "[Path (Relative)] " << path << std::endl;
+        printVerbose("[Path (Relative)] " + path);
     }
     somera::sortByName(options.libraries);
     somera::sortByName(options.sources);
