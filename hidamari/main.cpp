@@ -36,7 +36,7 @@ void setupCommandLineParser(CommandLineParser & parser)
     parser.addArgument("-o", JoinedOrSeparate, "Write output to <file>");
     parser.addArgument("-generator-output=", JoinedOrSeparate,
         "Generate build files under the <dir>");
-    parser.addArgument("-verbose", JoinedOrSeparate,
+    parser.addArgument("-verbose", Flag,
         "Provide additional status output");
     parser.addArgument("-std=", JoinedOrSeparate,
         "Language standard to compile for");
