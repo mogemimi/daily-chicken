@@ -16,7 +16,7 @@ struct GeneratorError {
 
     explicit GeneratorError(const std::string& desc)
         : description(desc)
-        , hasError(false)
+        , hasError(true)
     {}
 
     std::string description;
