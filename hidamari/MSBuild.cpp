@@ -635,7 +635,7 @@ GeneratorError MSBuild::generateMSBuildProject(const CompileOptions& options)
         projectDirectoryPath, options.targetName + ".vcxproj");
 
     {
-        std::ofstream stream(vcxprojPath, std::ios_base::out | std::ios_base::trunc);
+        std::ofstream stream(vcxprojPath, std::ios::out | std::ios::trunc);
         if (!stream) {
             return GeneratorError("Error: Cannot open.");
         }
@@ -644,7 +644,7 @@ GeneratorError MSBuild::generateMSBuildProject(const CompileOptions& options)
     {
         const auto vcxprojFilterPath = FileSystem::join(
             projectDirectoryPath, options.targetName + ".vcxproj.filters");
-        std::ofstream stream(vcxprojFilterPath, std::ios_base::out | std::ios_base::trunc);
+        std::ofstream stream(vcxprojFilterPath, std::ios::out | std::ios::trunc);
         if (!stream) {
             return GeneratorError("Error: Cannot open.");
         }
@@ -653,7 +653,7 @@ GeneratorError MSBuild::generateMSBuildProject(const CompileOptions& options)
     {
         const auto solutionFilePath = FileSystem::join(
             options.generatorOutputDirectory, options.targetName + ".sln");
-        std::ofstream stream(solutionFilePath, std::ios_base::out | std::ios_base::trunc);
+        std::ofstream stream(solutionFilePath, std::ios::out | std::ios::trunc);
         if (!stream) {
             return GeneratorError("Error: Cannot open.");
         }

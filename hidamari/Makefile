@@ -3,15 +3,16 @@ HEADERS = *.h ../daily/*.h
 SOURCES = \
 	../daily/*.cpp \
 	MSBuild.cpp \
-	XcodeProject.cpp
+	XcodeProject.cpp \
+	main.cpp
 
 bootstrap:
-	$(CXX) -o hidamari \
+	$(CXX) \
+		-o hidamari \
 		-std=c++14 \
 		-stdlib=libc++ \
 		-I.. \
-		$(SOURCES) \
-		main.cpp
+		$(SOURCES)
 	@mkdir -p ../bin
 	@mv hidamari ../bin/
 
@@ -22,8 +23,7 @@ xcode:
 		-stdlib=libc++ \
 		-I.. \
 		$(HEADERS) \
-		$(SOURCES) \
-		main.cpp
+		$(SOURCES)
 	@xcodebuild -project hidamari.xcodeproj -configuration Release
 	@mkdir -p ../bin
 	@cp build/Release/hidamari ../bin/hidamari

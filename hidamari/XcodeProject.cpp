@@ -1168,16 +1168,18 @@ GeneratorError Xcode::generateXcodeProject(const CompileOptions& options)
 
     auto xcodeProject = createXcodeProject(options);
     {
-        const auto pbxprojPath = FileSystem::join(xcodeprojPath, "project.pbxproj");
-        std::ofstream stream(pbxprojPath, std::ios_base::out | std::ios_base::trunc);
+        const auto pbxprojPath = FileSystem::join(
+            xcodeprojPath, "project.pbxproj");
+        std::ofstream stream(pbxprojPath, std::ios::out | std::ios::trunc);
         if (!stream) {
             return GeneratorError("Error: Cannot open.");
         }
         stream << generatePbxproj(*xcodeProject);
     }
     {
-        const auto pbxprojPath = FileSystem::join(xcworkspacePath, "contents.xcworkspacedata");
-        std::ofstream stream(pbxprojPath, std::ios_base::out | std::ios_base::trunc);
+        const auto xcworkspacedataPath = FileSystem::join(
+            xcworkspacePath, "contents.xcworkspacedata");
+        std::ofstream stream(xcworkspacedataPath, std::ios::out | std::ios::trunc);
         if (!stream) {
             return GeneratorError("Error: Cannot open.");
         }
