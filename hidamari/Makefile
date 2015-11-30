@@ -28,18 +28,5 @@ xcode:
 	@mkdir -p ../bin
 	@cp build/Release/hidamari ../bin/hidamari
 
-test:
-	./../bin/hidamari -generator=xcode \
-		-o HidamariTest \
-		-std=c++14 \
-		-stdlib=libc++ \
-		-I.. \
-		-I../somerachan/iutest/include \
-		$(HEADERS) \
-		$(SOURCES) \
-		tests/*.cpp
-	@xcodebuild -project HidamariTest.xcodeproj -configuration Release
-	./build/Release/HidamariTest
-
 sketch:
 	@open http://ch.nicovideo.jp/hidamari_01

@@ -1,6 +1,3 @@
-# For example:
-# SOMERACHAN_CLANG_DIR="/User/somera/clang+llvm-3.7.0-x86_64-apple-darwin"
-
 all: build run
 
 poi: build run
@@ -23,15 +20,15 @@ somera:
 gochiusa2:
 	open http://ch.nicovideo.jp/gochiusa2
 
-xcode:
-	@gyp somerachan/somerachan.gyp --depth=. -f xcode \
-		-Dclang_dir_mac=$(SOMERACHAN_CLANG_DIR)
-	@xcodebuild -project somerachan/somerachan.xcodeproj -configuration Release
-	@mkdir -p bin
-	@cp somerachan/build/Release/somerachan bin/somera
-	@cp $(SOMERACHAN_CLANG_DIR)/lib/libclang.dylib bin/
-
 test:
-	@gyp somerachan/test.gyp --depth=. -f xcode
-	@xcodebuild -project somerachan/test.xcodeproj -configuration Release
-	./somerachan/build/Release/SomeraChanTest
+	./bin/hidamari -generator=xcode \
+		-o DailyTest \
+		-std=c++14 \
+		-stdlib=libc++ \
+		-I. \
+		-Isomerachan/iutest/include \
+		daily/*.h \
+		daily/*.cpp \
+		daily/tests/*.cpp
+	@xcodebuild -project DailyTest.xcodeproj -configuration Release
+	./build/Release/DailyTest

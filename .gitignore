@@ -11,3 +11,5 @@ somerachan/*.xcodeproj/
 output.scm
 output/*
 snippets
+build/
+*.xcodeproj/
