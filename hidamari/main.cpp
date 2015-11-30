@@ -81,9 +81,15 @@ std::string getAuthorName()
         somera::SubprocessHelper::call("git config user.name"), "\n", "");
 }
 
-} // namespace somera
+template <class Container, typename Func>
+auto eraseIf(Container & container, Func func)
+{
+    return container.erase(
+        std::remove_if(std::begin(container), std::end(container), func),
+        std::end(container));
+}
 
-#include "XcodeProject.h"
+} // namespace somera
 
 int main(int argc, char *argv[])
 {
@@ -129,6 +135,10 @@ int main(int argc, char *argv[])
         printVerbose("[Path] " + path);
         options.sources.push_back(path);
     }
+
+    somera::eraseIf(options.sources, [](const std::string& path) {
+        return somera::StringHelper::startWith(path, "*");
+    });
 
     if (auto path = parser.getValue("-generator-output=")) {
         options.generatorOutputDirectory = *path;
