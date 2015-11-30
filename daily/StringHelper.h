@@ -21,6 +21,14 @@ std::string replace(
 
 std::vector<std::string> split(const std::string& source, char separator);
 
+std::vector<std::string> split(
+    const std::string& source,
+    const std::string& separator);
+
+std::string trimRight(const std::string& source, char separator);
+
+std::string trimLeft(const std::string& source, char separator);
+
 std::string format(char const* formatText, ...)
 #if defined(__has_attribute)
 #if __has_attribute(format)

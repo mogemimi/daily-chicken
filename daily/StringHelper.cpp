@@ -92,6 +92,38 @@ StringHelper::split(const std::string& source, char separator)
     return std::move(tokens);
 }
 
+std::vector<std::string>
+StringHelper::split(const std::string& source, const std::string& separator)
+{
+    std::vector<std::string> tokens;
+    std::string::size_type start = 0;
+    std::string::size_type end = 0;
+    while ((end = source.find(separator, start)) != std::string::npos) {
+        tokens.push_back(source.substr(start, end - start));
+        start = end + separator.size();
+    }
+    tokens.push_back(source.substr(start));
+    return std::move(tokens);
+}
+
+std::string StringHelper::trimRight(const std::string& source, char separator)
+{
+    const auto func = [&](char c){ return c != separator; };
+    std::string result(
+        std::begin(source),
+        std::find_if(std::rbegin(source), std::rend(source), func).base());
+    return std::move(result);
+}
+
+std::string StringHelper::trimLeft(const std::string& source, char separator)
+{
+    const auto func = [&](char c){ return c != separator; };
+    std::string result(
+        std::find_if(std::begin(source), std::end(source), func),
+        std::end(source));
+    return std::move(result);
+}
+
 std::string StringHelper::format(char const* formatText, ...)
 {
     std::va_list arg;
