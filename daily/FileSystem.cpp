@@ -483,7 +483,7 @@ bool FileSystem::isDirectory(const std::string& path)
 #else
     assert(!path.empty());
     struct stat st;
-    if (::stat(path.c_str(), &st) != -1) {
+    if (::stat(path.c_str(), &st) != 0) {
         return false;
     }
     return S_ISDIR(st.st_mode);
