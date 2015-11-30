@@ -402,6 +402,9 @@ FileSystem::relative(const std::string& path, const std::string& start)
         result = FileSystem::join(result, *iterL);
         iterL = PathIterator::next(iterL);
     }
+    if (result.empty()) {
+        result = '.';
+    }
     return std::move(result);
 }
 

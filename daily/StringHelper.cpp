@@ -4,8 +4,8 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdarg>
-#include <utility>
 #include <type_traits>
+#include <utility>
 
 namespace somera {
 namespace {
@@ -76,6 +76,20 @@ std::string StringHelper::replace(
         start += to.length();
     }
     return std::move(result);
+}
+
+std::vector<std::string>
+StringHelper::split(const std::string& source, char separator)
+{
+    std::vector<std::string> tokens;
+    std::string::size_type start = 0;
+    std::string::size_type end = 0;
+    while ((end = source.find(separator, start)) != std::string::npos) {
+        tokens.push_back(source.substr(start, end - start));
+        start = end + 1;
+    }
+    tokens.push_back(source.substr(start));
+    return std::move(tokens);
 }
 
 std::string StringHelper::format(char const* formatText, ...)

@@ -3,6 +3,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 namespace somera {
 namespace StringHelper {
@@ -17,6 +18,8 @@ std::string replace(
     const std::string& source,
     const std::string& from,
     const std::string& to);
+
+std::vector<std::string> split(const std::string& source, char separator);
 
 std::string format(char const* formatText, ...)
 #if defined(__has_attribute)
