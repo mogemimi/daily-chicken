@@ -61,7 +61,7 @@ void refactorSourceCode(const std::string& path)
     std::string text(start, end);
     input.close();
 
-    std::ofstream output(path, std::ios_base::out | std::ios_base::trunc);
+    std::ofstream output(path, std::ios::out | std::ios::trunc);
     if (!output) {
         return;
     }
