@@ -1,0 +1,14 @@
+{
+  "type": "object",
+  "properties": {
+    "ok": { "type": "boolean" },
+    "url": { "type": "string" },
+    "team": { "type": "string" },
+    "user": { "type": "string" },
+    "team_id": { "type": "string" },
+    "user_id": { "type": "string" },
+  },
+  "required": [
+    "ok",
+  ]
+}

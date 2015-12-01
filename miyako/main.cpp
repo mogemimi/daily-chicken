@@ -23,33 +23,6 @@ void setupCommandLineParser(CommandLineParser & parser)
     parser.addArgument("-help", Flag, "Display available options");
 }
 
-std::string removeUnnecessaryWhitespace(const std::string& text)
-{
-    using StringHelper::trimRight;
-    std::string result;
-    for (auto & line : StringHelper::split(text, '\n')) {
-        result += trimRight(trimRight(line, ' '), '\t');
-        result += '\n';
-    }
-    return std::move(result);
-}
-
-std::string replaceHardTabsWithWhiteSpaces(const std::string& text)
-{
-    constexpr auto spaces = "    ";
-    return StringHelper::replace(text, "\t", spaces);
-}
-
-std::string replaceCRLFWithLF(const std::string& text)
-{
-    return StringHelper::replace(text, "\r\n", "\n");
-}
-
-std::string trimLastLineBreaks(const std::string& text)
-{
-    return StringHelper::trimRight(text, '\n') + '\n';
-}
-
 void refactorSourceCode(const std::string& path)
 {
     std::ifstream input(path);

@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "properties": {
+    "ok": { "type": "boolean" },
+    "error": { "type": "string" },
+    "args": {
+      "type": "object",
+      "properties": {
+        "error": { "type": "string" }
+      }
+    }
+  },
+  "required": [
+    "ok"
+  ]
+}

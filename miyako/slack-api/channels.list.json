@@ -1,0 +1,63 @@
+{
+  "type": "object",
+  "properties": {
+    "ok": { "type": "boolean" },
+    "channels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "created": { "type": "integer" },
+          "creator": { "type": "string" },
+          "is_archived": { "type": "boolean" },
+          "is_general": { "type": "boolean" },
+          "is_member": { "type": "boolean" },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "string",
+            }
+          },
+          "topic": {
+            "type": "object",
+            "properties": {
+              "value": { "type": "string" },
+              "creator": { "type": "string" },
+              "last_set": { "type": "integer" },
+            },
+            "required": [ "value", "creator", "last_set" ]
+          },
+          "purpose": {
+            "type": "object",
+            "properties": {
+              "value": { "type": "string" },
+              "creator": { "type": "string" },
+              "last_set": { "type": "integer" },
+            },
+            "required": [ "value", "creator", "last_set" ]
+          },
+          "last_read": { "type": "string" },
+          "latest": {
+            "type": "object"
+          },
+          "unread_count": { "type": "integer" },
+          "unread_count_display": { "type": "integer" }
+        },
+        "required": [
+          "id",
+          "name",
+          "created",
+          "creator",
+          "is_archived",
+          "is_member",
+        ]
+      }
+    }
+  },
+  "required": [
+    "ok",
+    "channels"
+  ]
+}
