@@ -1,40 +1,51 @@
 # Hidamari
 
-This is **sketch** code, and my experimental build tool for C/C++.
-
-```cpp
-#include <iostream>
-#define sketch int main(){
-#define osaretara (42){case 42: std::printf("%s\n"
-#define yah "X | __ | X");break;} return 0;}
-#define fu
-
-sketch switch osaretara, yah fu fu
-```
-
-MIT License.
+A Clang/GCC-compatible C/C++ project file generator for coding sketch.
 
 ## Build and run
 
 ```sh
 cd daily-chicken
+
+# Build
 cd make -C hidamari bootstrap
 cd make -C hidamari xcode
-./bin/hidamari
+
+# Run
+./bin/hidamari -help
 ```
 
-## Test
+## Usage
 
 ```sh
-cd daily-chicken
-cd make -C hidamari bootstrap
-cd make -C hidamari test
-./bin/hidamari
-```
+# Generate myapp.xcodeproj file
+hidamari -generator=xcode -o myapp myapp.cpp
 
-## Lint
+# Generate myapp.sln and myapp.vcxproj file
+hidamari -generator=msbuild -o myapp myapp.cpp
+```
 
 ```sh
-cd daily-chicken
-cd make -C hidamari sketch
+hidamari -generator=xcode \
+  -o myapp \
+  -std=c++14 \
+  -stdlib=libc++ \
+  -Ipath/to/include \
+  *.cpp
+@xcodebuild -project myapp.xcodeproj -configuration Release
 ```
+
+The command-line tool is Clang/GCC-compatible, so it is the same as running the following commands in terminal:
+
+```sh
+clang \
+  -o myapp \
+  -std=c++14 \
+  -stdlib=libc++ \
+  -Ipath/to/include \
+  *.cpp
+```
+
+## License
+
+MIT License.

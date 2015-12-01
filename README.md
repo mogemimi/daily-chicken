@@ -29,3 +29,15 @@ make
 ```sh
 make gochiusa2
 ```
+
+## Hidamari Sketch
+
+```cpp
+#include <iostream>
+#define sketch int main(){
+#define osaretara (42){case 42: std::printf("%s\n"
+#define yah "X | __ | X");break;} return 0;}
+#define fu
+
+sketch switch osaretara, yah fu fu
+```
