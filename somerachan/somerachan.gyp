@@ -24,6 +24,8 @@
         'src/editdistance.cpp',
         'src/editdistance.h',
         'src/spellcheck.h',
+        'src/typo.cpp',
+        'src/typo.h',
         'src/utf8.cpp',
         'src/utf8.h',
         'src/worddiff.cpp',
@@ -33,6 +35,8 @@
         'src/thirdparty/ConvertUTF.c',
         'src/thirdparty/ConvertUTF.h',
         '../daily/Optional.h',
+        '../daily/StringHelper.cpp',
+        '../daily/StringHelper.h',
       ],
       'conditions': [
         ['OS == "win"', {

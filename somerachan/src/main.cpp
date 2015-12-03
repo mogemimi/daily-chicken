@@ -1,6 +1,7 @@
 #include "consolecolor.h"
 #include "editdistance.h"
 #include "spellcheck.h"
+#include "typo.h"
 #include "worddiff.h"
 #include "wordsegmenter.h"
 #include "daily/Optional.h"
@@ -46,12 +47,12 @@
 #include <string>
 #include <vector>
 
-
 using somera::NativeSpellChecker;
 using somera::EditDistance;
 using somera::Optional;
 using somera::NullOpt;
 using somera::WordSegmenter;
+using somera::TypoMan;
 
 using namespace clang;
 using namespace clang::ast_matchers;
@@ -67,110 +68,18 @@ static cl::extrahelp MoreHelp("\nMore help text...");
 
 namespace {
 
-std::vector<std::string> correctWord(const std::string& word)
-{
-    auto correction = somera::NativeSpellChecker::correctSpelling(word);
-    if (correction.empty()) {
-        return {};
-    }
-
-    auto corrections = somera::NativeSpellChecker::findClosestWords(word);
-    if (corrections.empty()) {
-        return {std::move(correction)};
-    }
-
-    if (corrections.size() > 4) {
-        corrections.resize(4);
-    }
-
-    std::sort(std::begin(corrections), std::end(corrections), [&](auto& a, auto& b) {
-        const auto fuzzyA = EditDistance::closestMatchFuzzyDistance(word, a);
-        const auto fuzzyB = EditDistance::closestMatchFuzzyDistance(word, b);
-        if (fuzzyA != fuzzyB) {
-            return fuzzyA > fuzzyB;
-        }
-        const auto jwA = EditDistance::jaroWinklerDistance(word, a);
-        const auto jwB = EditDistance::jaroWinklerDistance(word, b);
-        if (jwA != jwB) {
-            return jwA > jwB;
-        }
-        const auto lsA = EditDistance::levenshteinDistance(word, a);
-        const auto lsB = EditDistance::levenshteinDistance(word, b);
-        return lsA <= lsB;
-    });
-
-    assert(!corrections.empty());
-    return std::move(corrections);
-}
-
-struct TypoSource {
-    std::string file;
-    clang::SourceRange range;
-};
-
-struct Typo {
-    std::string typo;
-    std::vector<std::string> corrections;
-    std::vector<TypoSource> sources;
-};
-
-struct TypoSet {
-private:
-    std::vector<std::string> newTypoWords;
-public:
-    std::map<std::string, Typo> typos;
-
-    bool exists(const std::string& word)
-    {
-        return typos.find(word) != std::end(typos);
-    }
-
-    somera::Optional<Typo*> findTypo(const std::string& word)
-    {
-        auto iter = typos.find(word);
-        if (iter != std::end(typos)) {
-            return &iter->second;
-        }
-        return somera::NullOpt;
-    }
-
-    void addTypoSource(const std::string& word, TypoSource && s)
-    {
-        auto iter = typos.find(word);
-        assert(iter != std::end(typos));
-        iter->second.sources.push_back(std::move(s));
-    }
-
-    void addTypo(Typo && typo)
-    {
-        auto word = typo.typo;
-        newTypoWords.push_back(word);
-        typos.emplace(word, std::move(typo));
-    }
-
-    void clearNewTypoWords()
-    {
-        newTypoWords.clear();
-    }
-
-    const std::vector<std::string>& getNewTypoWords() const
-    {
-        return newTypoWords;
-    }
-};
-
 class MyCommentHandler final : public clang::CommentHandler {
 private:
     llvm::StringRef inputFile;
     Rewriter* rewriter = nullptr;
-    TypoSet* typos = nullptr;
+    TypoMan* typos = nullptr;
 
 public:
     void setFile(llvm::StringRef fileIn) { inputFile = fileIn; }
 
     void setRewriter(Rewriter* rewriterIn) { rewriter = rewriterIn; }
 
-    void setTypoSet(TypoSet* typosIn) { typos = typosIn; }
+    void setTypoSet(TypoMan* typosIn) { typos = typosIn; }
 
     bool HandleComment(clang::Preprocessor &pp, clang::SourceRange range) override
     {
@@ -188,45 +97,9 @@ public:
         const auto fileData = sm.getBufferData(startLoc.first);
 
         auto sourceString = fileData.substr(startLoc.second, endLoc.second - startLoc.second).str();
-
-        std::set<std::string> dictionary = {
-//            ".jpg",
-//            ".png",
-//            ".mp3",
-//            ".ogg",
-//            "//!", // doxygen
-            "json",
-            "impl",
-            "NONINFRINGEMENT", // for MIT License
-            "overrided" // => overriden
-        };
-
-        WordSegmenter segmenter;
-        segmenter.setDictionary(dictionary);
-
-        segmenter.parse(sourceString, [&](const somera::PartOfSpeech& pos) {
-            const auto word = pos.text;
-            if (pos.tag != somera::PartOfSpeechTag::Raw and
-                pos.tag != somera::PartOfSpeechTag::EnglishWord) {
-                return;
-            }
-
-            if (typos->exists(word)) {
-                TypoSource source;
-                source.file = inputFile;
-                source.range = range;
-                typos->addTypoSource(word, std::move(source));
-                return;
-            }
-
-            auto corrections = correctWord(word);
-            if (!corrections.empty()) {
-                Typo typo;
-                typo.typo = word;
-                typo.corrections = std::move(corrections);
-                typos->addTypo(std::move(typo));
-            }
-        });
+        somera::TypoSource source;
+        source.file = inputFile;
+        typos->computeFromSentence(sourceString, source);
 
 //        std::transform(sourceString.begin(), sourceString.end(), sourceString.begin(), toupper);
 //        rewriter->ReplaceText(range, sourceString);
@@ -292,7 +165,7 @@ private:
 
 class MyASTConsumer final : public ASTConsumer {
 public:
-    MyASTConsumer(Rewriter &rewriter, TypoSet & typosIn)
+    MyASTConsumer(Rewriter &rewriter, TypoMan & typosIn)
         : handlerForIf(rewriter)
         , handlerForDeclStmt(rewriter)
         , typos(typosIn)
@@ -355,24 +228,7 @@ public:
             auto fd = llvm::dyn_cast<clang::NamedDecl>(*it);
             if (fd) {
                 std::string identifier = fd->getDeclName().getAsString();
-                auto words = somera::IdentifierWordSegmenter::parse(identifier);
-
-                for (auto & word : words) {
-                    if (word.size() <= 3) {
-                        continue;
-                    }
-                    if (typos.exists(word)) {
-                        continue;
-                    }
-
-                    auto corrections = correctWord(word);
-                    if (!corrections.empty()) {
-                        Typo typo;
-                        typo.typo = word;
-                        typo.corrections = std::move(corrections);
-                        typos.addTypo(std::move(typo));
-                    }
-                }
+                typos.computeFromIdentifier(identifier);
             }
         }
         return true;
@@ -382,7 +238,7 @@ private:
     IfStmtHandler handlerForIf;
     DeclStmtHandler handlerForDeclStmt;
     MatchFinder matcher;
-    TypoSet & typos;
+    TypoMan & typos;
 };
 
 class MyPPCallbacks : public clang::PPCallbacks {
@@ -425,86 +281,10 @@ public:
 
 class MyFrontendAction final : public ASTFrontendAction {
 public:
-    MyFrontendAction(TypoSet & typosIn) : typos(typosIn) {}
+    MyFrontendAction(TypoMan & typosIn) : typos(typosIn) {}
 
     void EndSourceFileAction() override
     {
-        for (const auto& word : typos.getNewTypoWords()) {
-            assert(typos.exists(word));
-            const auto& typo = **typos.findTypo(word);
-            const auto& corrections = typo.corrections;
-
-            if (corrections.empty()) {
-                continue;
-            }
-
-            using somera::DiffOperation;
-            using somera::TerminalColor;
-            {
-                auto & correction = corrections.front();
-                auto hunks = somera::computeDiff(word, correction);
-                constexpr int indentSpaces = 18;
-                std::stringstream fromStream;
-                for (auto & hunk : hunks) {
-                    if (hunk.operation == DiffOperation::Equality) {
-                        fromStream << hunk.text;
-                    }
-                    else if (hunk.operation == DiffOperation::Deletion) {
-                        fromStream << somera::changeTerminalTextColor(
-                            hunk.text,
-                            TerminalColor::Black,
-                            TerminalColor::Red);
-                    }
-                }
-                for (int i = indentSpaces - static_cast<int>(word.size()); i > 0; --i) {
-                    fromStream << " ";
-                }
-                std::stringstream toStream;
-                for (auto & hunk : hunks) {
-                    if (hunk.operation == DiffOperation::Equality) {
-                        toStream << hunk.text;
-                    }
-                    else if (hunk.operation == DiffOperation::Insertion) {
-                        toStream << somera::changeTerminalTextColor(
-                            hunk.text,
-                            TerminalColor::White,
-                            TerminalColor::Green);
-                    }
-                }
-                for (int i = indentSpaces - static_cast<int>(correction.size()); i > 0; --i) {
-                    toStream << " ";
-                }
-                std::printf("%s => %s", fromStream.str().c_str(), toStream.str().c_str());
-            }
-
-            if (corrections.size() > 1) {
-                std::printf(" (");
-                for (size_t i = 1; i < corrections.size(); ++i) {
-                    if (i > 1) {
-                        std::printf(" ");
-                    }
-                    auto & correction = corrections[i];
-                    auto hunks = somera::computeDiff(word, correction);
-                    std::stringstream toStream;
-                    for (auto & hunk : hunks) {
-                        if (hunk.operation == DiffOperation::Equality) {
-                            toStream << hunk.text;
-                        }
-                        else if (hunk.operation == DiffOperation::Insertion) {
-                            toStream << somera::changeTerminalTextColor(
-                                hunk.text,
-                                TerminalColor::Black,
-                                TerminalColor::Blue);
-                        }
-                    }
-                    std::printf("%s", toStream.str().c_str());
-                }
-                std::printf(")");
-            }
-            std::printf("\n");
-        }
-        typos.clearNewTypoWords();
-
 //        rewriter.getEditBuffer(rewriter.getSourceMgr().getMainFileID())
 //            .write(llvm::outs());
     }
@@ -525,7 +305,7 @@ public:
 
 private:
     Rewriter rewriter;
-    TypoSet & typos;
+    TypoMan & typos;
     MyCommentHandler commentHandler;
 };
 
@@ -538,9 +318,9 @@ public:
 };
 
 class MyFrontendActionFactory final : public FrontendActionFactory {
-    TypoSet & typos;
+    TypoMan & typos;
 public:
-    MyFrontendActionFactory(TypoSet & typosIn) : typos(typosIn) {}
+    MyFrontendActionFactory(TypoMan & typosIn) : typos(typosIn) {}
 
     clang::FrontendAction* create() override {
         return new MyFrontendAction(typos);
@@ -554,9 +334,87 @@ int main(int argc, const char **argv)
     CommonOptionsParser options(argc, argv, MyToolCategory);
     ClangTool tool(options.getCompilations(), options.getSourcePathList());
 
-    TypoSet typos;
     MyDiagnosticConsumer diagnosticConsumer;
     tool.setDiagnosticConsumer(&diagnosticConsumer);
+
+    TypoMan typos;
+    typos.setStrictWhiteSpace(false);
+    typos.setStrictHyphen(false);
+    typos.setStrictLetterCase(false);
+    typos.setMinimumWordSize(4);
+    typos.setFoundCallback([](const somera::Typo& typo) -> void
+    {
+        const auto& word = typo.typo;
+        const auto& corrections = typo.corrections;
+        if (corrections.empty()) {
+            return;
+        }
+
+        using somera::DiffOperation;
+        using somera::TerminalColor;
+        {
+            auto & correction = corrections.front();
+            auto hunks = somera::computeDiff(word, correction);
+            constexpr int indentSpaces = 18;
+            std::stringstream fromStream;
+            for (auto & hunk : hunks) {
+                if (hunk.operation == DiffOperation::Equality) {
+                    fromStream << hunk.text;
+                }
+                else if (hunk.operation == DiffOperation::Deletion) {
+                    fromStream << somera::changeTerminalTextColor(
+                        hunk.text,
+                        TerminalColor::Black,
+                        TerminalColor::Red);
+                }
+            }
+            for (int i = indentSpaces - static_cast<int>(word.size()); i > 0; --i) {
+                fromStream << " ";
+            }
+            std::stringstream toStream;
+            for (auto & hunk : hunks) {
+                if (hunk.operation == DiffOperation::Equality) {
+                    toStream << hunk.text;
+                }
+                else if (hunk.operation == DiffOperation::Insertion) {
+                    toStream << somera::changeTerminalTextColor(
+                        hunk.text,
+                        TerminalColor::White,
+                        TerminalColor::Green);
+                }
+            }
+            for (int i = indentSpaces - static_cast<int>(correction.size()); i > 0; --i) {
+                toStream << " ";
+            }
+            std::printf("%s => %s", fromStream.str().c_str(), toStream.str().c_str());
+        }
+
+        if (corrections.size() > 1) {
+            std::printf(" (");
+            for (size_t i = 1; i < corrections.size(); ++i) {
+                if (i > 1) {
+                    std::printf(" ");
+                }
+                auto & correction = corrections[i];
+                auto hunks = somera::computeDiff(word, correction);
+                std::stringstream toStream;
+                for (auto & hunk : hunks) {
+                    if (hunk.operation == DiffOperation::Equality) {
+                        toStream << hunk.text;
+                    }
+                    else if (hunk.operation == DiffOperation::Insertion) {
+                        toStream << somera::changeTerminalTextColor(
+                            hunk.text,
+                            TerminalColor::Black,
+                            TerminalColor::Blue);
+                    }
+                }
+                std::printf("%s", toStream.str().c_str());
+            }
+            std::printf(")");
+        }
+        std::printf("\n");
+    });
 
     return tool.run(std::make_unique<MyFrontendActionFactory>(typos).get());
 }
