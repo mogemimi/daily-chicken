@@ -1,4 +1,4 @@
-HEADERS = ../daily/*.h
+HEADERS = ../daily/*.h *.h
 SOURCES = \
 	main.cpp
 
