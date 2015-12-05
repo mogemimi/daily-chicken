@@ -6,6 +6,7 @@
 #include "worddiff.h"
 #include "daily/StringHelper.h"
 #include <cassert>
+#include <utility>
 
 namespace somera {
 namespace {
@@ -16,32 +17,16 @@ std::vector<std::string> correctWord(const std::string& word)
     if (correction.empty()) {
         return {};
     }
-
     auto corrections = somera::NativeSpellChecker::findClosestWords(word);
-    if (corrections.empty()) {
-        return {std::move(correction)};
-    }
-
     if (corrections.size() > 4) {
+        // NOTE:
+        // If there are too many corrections, the program uses a lot of RAM.
+        // So please should be resize the 'corrections'.
         corrections.resize(4);
     }
-
-    std::sort(std::begin(corrections), std::end(corrections), [&](auto& a, auto& b) {
-        const auto fuzzyA = EditDistance::closestMatchFuzzyDistance(word, a);
-        const auto fuzzyB = EditDistance::closestMatchFuzzyDistance(word, b);
-        if (fuzzyA != fuzzyB) {
-            return fuzzyA > fuzzyB;
-        }
-        const auto jwA = EditDistance::jaroWinklerDistance(word, a);
-        const auto jwB = EditDistance::jaroWinklerDistance(word, b);
-        if (jwA != jwB) {
-            return jwA > jwB;
-        }
-        const auto lsA = EditDistance::levenshteinDistance(word, a);
-        const auto lsB = EditDistance::levenshteinDistance(word, b);
-        return lsA <= lsB;
-    });
-
+    if (std::find(std::begin(corrections), std::end(corrections), correction) == std::end(corrections)) {
+        corrections.push_back(std::move(correction));
+    }
     assert(!corrections.empty());
     return std::move(corrections);
 }
@@ -73,6 +58,26 @@ void eraseIf(Container & container, Func func)
     container.erase(std::remove_if(
         std::begin(container), std::end(container), func),
         std::end(container));
+}
+
+void sortNearly(const std::string& word, std::vector<std::string> & corrections)
+{
+    const auto nearly = [&](auto& a, auto& b) {
+        const auto fuzzyA = EditDistance::closestMatchFuzzyDistance(word, a);
+        const auto fuzzyB = EditDistance::closestMatchFuzzyDistance(word, b);
+        if (fuzzyA != fuzzyB) {
+            return fuzzyA > fuzzyB;
+        }
+        const auto jwA = EditDistance::jaroWinklerDistance(word, a);
+        const auto jwB = EditDistance::jaroWinklerDistance(word, b);
+        if (jwA != jwB) {
+            return jwA > jwB;
+        }
+        const auto lsA = EditDistance::levenshteinDistance(word, a);
+        const auto lsB = EditDistance::levenshteinDistance(word, b);
+        return lsA <= lsB;
+    };
+    std::sort(std::begin(corrections), std::end(corrections), nearly);
 }
 
 } // unnamed namespace
@@ -140,43 +145,59 @@ void TypoMan::computeFromWord(const std::string& word)
     if (corrections.empty()) {
         return;
     }
-
     if (!isStrictWhiteSpace) {
-        eraseIf(corrections, [&](const std::string& correction) {
+        for (auto & correction : corrections) {
             auto hunks = somera::computeDiff(word, correction);
+            std::string filtered;
             for (auto & hunk : hunks) {
-                if (hunk.operation == DiffOperation::Equality) {
-                    continue;
-                }
-                if (hunk.operation == DiffOperation::Insertion
+                if (hunk.operation != DiffOperation::Equality
                     && hunk.text == " ") {
                     continue;
                 }
-                return false;
+                if (hunk.operation != DiffOperation::Deletion) {
+                    filtered += hunk.text;
+                }
             }
-            return true;
+            correction = filtered;
+        }
+        eraseIf(corrections, [&](const std::string& correction) {
+            return correction.empty();
         });
     }
     if (!isStrictHyphen) {
-        eraseIf(corrections, [&](const std::string& correction) {
+        for (auto & correction : corrections) {
             auto hunks = somera::computeDiff(word, correction);
+            std::string filtered;
             for (auto & hunk : hunks) {
-                if (hunk.operation == DiffOperation::Equality) {
-                    continue;
-                }
-                if (hunk.operation == DiffOperation::Insertion
+                if (hunk.operation != DiffOperation::Equality
                     && hunk.text == "-") {
                     continue;
                 }
-                return false;
+                if (hunk.operation != DiffOperation::Deletion) {
+                    filtered += hunk.text;
+                }
             }
-            return true;
+            correction = filtered;
+        }
+        eraseIf(corrections, [&](const std::string& correction) {
+            return correction.empty();
         });
     }
     if (!isStrictLetterCase) {
         eraseIf(corrections, [&](const std::string& correction) {
             return StringHelper::toLower(word) == StringHelper::toLower(correction);
         });
+    }
+
+    std::sort(std::begin(corrections), std::end(corrections));
+    corrections.erase(
+        std::unique(std::begin(corrections), std::end(corrections)),
+        std::end(corrections));
+    sortNearly(word, corrections);
+
+    assert(maxCorrectWordCount > 0);
+    if (static_cast<int>(corrections.size()) > maxCorrectWordCount) {
+        corrections.resize(maxCorrectWordCount);
     }
 
     Typo typo;
@@ -190,7 +211,8 @@ void TypoMan::computeFromWord(const std::string& word)
 
 void TypoMan::setMinimumWordSize(int wordSize)
 {
-    this->minimumWordSize = std::min(wordSize, 0);
+    assert(wordSize >= 0);
+    this->minimumWordSize = std::max(wordSize, 0);
 }
 
 void TypoMan::setMaxCorrectWordCount(int maxCount)

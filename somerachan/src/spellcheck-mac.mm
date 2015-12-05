@@ -60,7 +60,9 @@ std::vector<std::string> NativeSpellChecker::findClosestWords(
         inSpellDocumentWithTag:0];
 
     std::vector<std::string> results;
-    results.reserve(corrections.count);
+    if (corrections.count > 0) {
+        results.reserve(corrections.count);
+    }
     for (NSString* s in corrections) {
         results.push_back([s UTF8String]);
     }
