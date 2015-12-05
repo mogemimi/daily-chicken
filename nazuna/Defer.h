@@ -24,18 +24,20 @@ public:
     Defer(const Defer&) = delete;
     Defer & operator=(const Defer&) = delete;
 
-    Defer(Defer && d)
+    Defer(Defer && other)
     {
         if (this->func) {
             this->func();
         }
-        this->func = std::move(d.func);
+        this->func = std::move(other.func);
     }
 
-    Defer & operator=(Defer && d)
+    Defer & operator=(Defer && other)
     {
-        this->func();
-        this->func = std::move(d.func);
+        if (this->func) {
+            this->func();
+        }
+        this->func = std::move(other.func);
         return *this;
     }
 };
