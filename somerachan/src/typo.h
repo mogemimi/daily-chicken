@@ -28,6 +28,7 @@ private:
     std::map<std::string, Typo> typos;
     std::function<void(const Typo&)> onFoundTypo;
     int minimumWordSize;
+    int maxCorrectWordCount;
     bool isStrictWhiteSpace;
     bool isStrictHyphen;
     bool isStrictLetterCase;
@@ -43,6 +44,8 @@ public:
     void computeFromWord(const std::string& word);
 
     void setMinimumWordSize(int wordSize);
+
+    void setMaxCorrectWordCount(int maxCount);
 
     void setStrictWhiteSpace(bool strictWhiteSpace);
 

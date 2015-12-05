@@ -342,6 +342,7 @@ int main(int argc, const char **argv)
     typos.setStrictHyphen(false);
     typos.setStrictLetterCase(false);
     typos.setMinimumWordSize(4);
+    typos.setMaxCorrectWordCount(4);
     typos.setFoundCallback([](const somera::Typo& typo) -> void
     {
         const auto& word = typo.typo;

@@ -79,6 +79,7 @@ void eraseIf(Container & container, Func func)
 
 TypoMan::TypoMan() noexcept
     : minimumWordSize(3)
+    , maxCorrectWordCount(4)
     , isStrictWhiteSpace(true)
     , isStrictHyphen(true)
     , isStrictLetterCase(true)
@@ -190,6 +191,12 @@ void TypoMan::computeFromWord(const std::string& word)
 void TypoMan::setMinimumWordSize(int wordSize)
 {
     this->minimumWordSize = std::min(wordSize, 0);
+}
+
+void TypoMan::setMaxCorrectWordCount(int maxCount)
+{
+    assert(maxCount > 0);
+    this->maxCorrectWordCount = std::max(maxCount, 1);
 }
 
 void TypoMan::setStrictWhiteSpace(bool strictWhiteSpace)
