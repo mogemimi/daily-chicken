@@ -162,12 +162,12 @@ void TypoMan::computeFromWord(const std::string& word)
         return;
     }
     if (ignoreBritishEnglish) {
-        std::vector<std::string> correctionInUS;
-        std::swap(corrections, correctionInUS);
+        std::vector<std::string> correctionsInUS;
+        std::swap(corrections, correctionsInUS);
         auto correctionsInUK = correctWord(word, LanguageLocale::en_UK);
         std::set_intersection(
-            std::begin(correctionInUS),
-            std::end(correctionInUS),
+            std::begin(correctionsInUS),
+            std::end(correctionsInUS),
             std::begin(correctionsInUK),
             std::end(correctionsInUK),
             std::back_inserter(corrections));
