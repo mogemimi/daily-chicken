@@ -5,19 +5,34 @@
 #include "spellcheck.h"
 #include "worddiff.h"
 #include "daily/StringHelper.h"
+#include <algorithm>
 #include <cassert>
+#include <iterator>
 #include <utility>
 
 namespace somera {
 namespace {
 
-std::vector<std::string> correctWord(const std::string& word)
+enum class LanguageLocale {
+    en_US,
+    en_UK,
+};
+
+std::vector<std::string> correctWord(const std::string& word, LanguageLocale locale)
 {
-    auto correction = somera::NativeSpellChecker::correctSpelling(word);
+    NativeSpellCheckOptions options;
+    options.language = [&] {
+        if (locale == LanguageLocale::en_UK) {
+            return "en_UK";
+        }
+        return "en_US";
+    }();
+
+    auto correction = somera::NativeSpellChecker::correctSpelling(word, options);
     if (correction.empty()) {
         return {};
     }
-    auto corrections = somera::NativeSpellChecker::findClosestWords(word);
+    auto corrections = somera::NativeSpellChecker::findClosestWords(word, options);
     if (corrections.size() > 4) {
         // NOTE:
         // If there are too many corrections, the program uses a lot of RAM.
@@ -25,7 +40,7 @@ std::vector<std::string> correctWord(const std::string& word)
         corrections.resize(4);
     }
     if (std::find(std::begin(corrections), std::end(corrections), correction) == std::end(corrections)) {
-        corrections.push_back(std::move(correction));
+        corrections.insert(std::begin(corrections), std::move(correction));
     }
     assert(!corrections.empty());
     return std::move(corrections);
@@ -88,6 +103,7 @@ TypoMan::TypoMan() noexcept
     , isStrictWhiteSpace(true)
     , isStrictHyphen(true)
     , isStrictLetterCase(true)
+    , ignoreBritishEnglish(false)
 {
     std::set<std::string> dictionary = {
         "jpg",
@@ -141,9 +157,20 @@ void TypoMan::computeFromWord(const std::string& word)
     if (exists(typos, word)) {
         return;
     }
-    auto corrections = correctWord(word);
+    auto corrections = correctWord(word, LanguageLocale::en_US);
     if (corrections.empty()) {
         return;
+    }
+    if (ignoreBritishEnglish) {
+        std::vector<std::string> correctionInUS;
+        std::swap(corrections, correctionInUS);
+        auto correctionsInUK = correctWord(word, LanguageLocale::en_UK);
+        std::set_intersection(
+            std::begin(correctionInUS),
+            std::end(correctionInUS),
+            std::begin(correctionsInUK),
+            std::end(correctionsInUK),
+            std::back_inserter(corrections));
     }
     if (!isStrictWhiteSpace) {
         for (auto & correction : corrections) {
@@ -234,6 +261,11 @@ void TypoMan::setStrictHyphen(bool strictHyphen)
 void TypoMan::setStrictLetterCase(bool strictLetterCase)
 {
     this->isStrictLetterCase = strictLetterCase;
+}
+
+void TypoMan::setIgnoreBritishEnglish(bool ignore)
+{
+    this->ignoreBritishEnglish = ignore;
 }
 
 void TypoMan::setFoundCallback(std::function<void(const Typo&)> callback)

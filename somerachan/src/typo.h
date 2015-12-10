@@ -32,6 +32,7 @@ private:
     bool isStrictWhiteSpace;
     bool isStrictHyphen;
     bool isStrictLetterCase;
+    bool ignoreBritishEnglish;
 
 public:
     TypoMan() noexcept;
@@ -52,6 +53,8 @@ public:
     void setStrictHyphen(bool strictHyphen);
 
     void setStrictLetterCase(bool strictLetterCase);
+
+    void setIgnoreBritishEnglish(bool ignore);
 
     void setFoundCallback(std::function<void(const Typo&)> callback);
 };
