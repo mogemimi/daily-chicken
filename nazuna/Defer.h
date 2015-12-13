@@ -40,6 +40,12 @@ public:
         this->func = std::move(other.func);
         return *this;
     }
+
+    void cancel()
+    {
+        std::function<void()> f;
+        std::swap(func, f);
+    }
 };
 
 } // namespace somera
