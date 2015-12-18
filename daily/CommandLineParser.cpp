@@ -76,6 +76,16 @@ void CommandLineParser::parse(int argc, const char *argv[])
 
     for (int i = 1; i < argc; i++) {
         std::string argument = argv[i];
+
+        auto isSeparator = [](char c) -> bool {
+            return c == ' ' || c == '\n' || c == '\t';
+        };
+        argument = StringHelper::trimLeft(argument, isSeparator);
+        argument = StringHelper::trimRight(argument, isSeparator);
+        if (argument.empty()) {
+            continue;
+        }
+
         if (!StringHelper::startWith(argument, "-")) {
             paths.push_back(std::move(argument));
             continue;

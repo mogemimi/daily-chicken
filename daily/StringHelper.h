@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,14 @@ std::vector<std::string> split(
 std::string trimRight(const std::string& source, char separator);
 
 std::string trimLeft(const std::string& source, char separator);
+
+std::string trimRight(
+    const std::string& source,
+    std::function<bool(char)> isSeparator);
+
+std::string trimLeft(
+    const std::string& source,
+    std::function<bool(char)> isSeparator);
 
 std::string format(char const* formatText, ...)
 #if defined(__has_attribute)

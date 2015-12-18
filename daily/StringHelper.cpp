@@ -124,6 +124,28 @@ std::string StringHelper::trimLeft(const std::string& source, char separator)
     return std::move(result);
 }
 
+std::string StringHelper::trimRight(
+    const std::string& source,
+    std::function<bool(char)> isSeparator)
+{
+    auto func = std::not1(std::move(isSeparator));
+    std::string result(
+        std::begin(source),
+        std::find_if(std::rbegin(source), std::rend(source), func).base());
+    return std::move(result);
+}
+
+std::string StringHelper::trimLeft(
+    const std::string& source,
+    std::function<bool(char)> isSeparator)
+{
+    auto func = std::not1(std::move(isSeparator));
+    std::string result(
+        std::find_if(std::begin(source), std::end(source), func),
+        std::end(source));
+    return std::move(result);
+}
+
 std::string StringHelper::format(char const* formatText, ...)
 {
     std::va_list arg;

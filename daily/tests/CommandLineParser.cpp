@@ -32,3 +32,29 @@ TEST(CommandLineParser, TrivialCase)
     EXPECT_EQ("hidamari.cpp", paths[0]);
     EXPECT_EQ("sketch.cpp", paths[1]);
 }
+
+TEST(CommandLineParser, Spaces)
+{
+    constexpr int argc = 8;
+    const char* argv[argc] = {
+        "/usr/local/bin/gcc",
+        "",
+        " ",
+        "  \n  ",
+        "yuno\n",
+        " miyako ",
+        "hiro\n",
+        "    sae\n   ",
+    };
+
+    CommandLineParser parser;
+    parser.parse(argc, argv);
+    EXPECT_FALSE(parser.hasParseError());
+
+    auto paths = parser.getPaths();
+    ASSERT_EQ(4, paths.size());
+    EXPECT_EQ("yuno", paths[0]);
+    EXPECT_EQ("miyako", paths[1]);
+    EXPECT_EQ("hiro", paths[2]);
+    EXPECT_EQ("sae", paths[3]);
+}
