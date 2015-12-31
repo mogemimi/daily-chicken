@@ -1,0 +1,3 @@
+# Mami
+
+Learning socket programming.
