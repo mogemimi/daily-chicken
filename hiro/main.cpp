@@ -4,6 +4,7 @@
 #include "../daily/StringHelper.h"
 #include <iostream>
 #include <fstream>
+#include <regex>
 
 using namespace somera;
 
@@ -16,6 +17,34 @@ void setupCommandLineParser(CommandLineParser & parser)
     parser.setUsageText("hiro [options ...] [source file ...]");
     parser.addArgument("-h", Flag, "Display available options");
     parser.addArgument("-help", Flag, "Display available options");
+}
+
+std::string trimLastLineBreaks(const std::string& text)
+{
+    return StringHelper::trimRight(text, '\n') + '\n';
+}
+
+std::string replaceHeaderWithPragmaOnce(const std::string& text)
+{
+    std::regex re(R"(#ifndef POMDOG_[A-Z0-9_]*_HPP\n#define POMDOG_[A-Z0-9_]*_HPP\n((.*\n)*)\n#endif \/\/ POMDOG_[A-Z0-9_]*_HPP)");
+    return std::regex_replace(text, re, "#pragma once\n$1");
+}
+
+std::string replaceLicenseYear(const std::string& text)
+{
+    return StringHelper::replace(
+        text,
+        "2013-2015 mogemimi.",
+        "2013-2016 mogemimi.");
+}
+
+std::string replaceLicense(const std::string& text)
+{
+    return StringHelper::replace(
+        text,
+"// Copyright (c) 2013-2016 mogemimi.\n"
+"// Distributed under the MIT license. See LICENSE.md file for details.",
+"// Copyright (c) 2013-2016 mogemimi. Distributed under the MIT license.");
 }
 
 void refactorSourceCode(const std::string& path)
@@ -33,12 +62,12 @@ void refactorSourceCode(const std::string& path)
     if (!output) {
         return;
     }
-    constexpr auto from =
-        "// Copyright (c) 2013-2015 mogemimi.\n"
-        "// Distributed under the MIT license. See LICENSE.md file for details.";
-    constexpr auto to =
-        "// Copyright (c) 2013-2015 mogemimi. Distributed under the MIT license.";
-    text = StringHelper::replace(text, from, to);
+
+    text = replaceHeaderWithPragmaOnce(text);
+    text = trimLastLineBreaks(text);
+    text = replaceLicenseYear(text);
+    text = replaceLicense(text);
+
     output << text;
 }
 
@@ -66,5 +95,6 @@ int main(int argc, char *argv[])
     for (auto & path : parser.getPaths()) {
         refactorSourceCode(path);
     }
+    std::cout << "ok" << std::endl;
     return 0;
 }
