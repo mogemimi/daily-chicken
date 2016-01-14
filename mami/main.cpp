@@ -1,18 +1,25 @@
 // Copyright (c) 2016 mogemimi. Distributed under the MIT license.
 
-#include "../daily/CommandLineParser.h"
-#include "../daily/StringHelper.h"
 #include <iostream>
 #include <fstream>
 #include <regex>
 
-using namespace somera;
-
 namespace {
 
-class HandlerWrapperBase {
+class HandlerBase {
 public:
-    virtual ~HandlerWrapperBase() = default;
+    virtual ~HandlerBase() = default;
+};
+
+template <class PipeIn, class PipeOut>
+class Handler : public HandlerBase {
+public:
+    using In = PipeIn;
+    using Out = PipeOut;
+
+    virtual ~Handler() = default;
+
+    virtual Out Execute(In in) = 0;
 };
 
 template <class In>
@@ -34,6 +41,8 @@ template <class In>
 class InboundLink {
 public:
     virtual ~InboundLink() = default;
+
+    virtual void Write(In request) = 0;
 };
 
 template <class Out>
@@ -46,7 +55,7 @@ class PipelineContext {
 public:
     virtual ~PipelineContext() = default;
 
-    virtual void SetNextIn(PipelineContext* context) = 0;
+    virtual void SetPrevIn(PipelineContext* context) = 0;
 
     virtual void SetNextOut(PipelineContext* context) = 0;
 };
@@ -57,13 +66,20 @@ class ContextImplement final
     , public OutboundLink<Out>
     , public PipelineContext {
 public:
-    void SetNextIn(PipelineContext* context) override
+    using HandlerType = Handler<In, Out>;
+
+    explicit ContextImplement(std::shared_ptr<HandlerType> handlerIn)
+        : handler(handlerIn)
+    {
+    }
+
+    void SetPrevIn(PipelineContext* context) override
     {
         if (context == nullptr) {
             nextIn = nullptr;
             return;
         }
-        auto newNextIn = dynamic_cast<InboundLink<In>*>(context);
+        auto newNextIn = dynamic_cast<OutboundLink<In>*>(context);
         if (newNextIn) {
             nextIn = newNextIn;
         }
@@ -78,7 +94,7 @@ public:
             nextOut = nullptr;
             return;
         }
-        auto newNextOut = dynamic_cast<OutboundLink<Out>*>(context);
+        auto newNextOut = dynamic_cast<InboundLink<Out>*>(context);
         if (newNextOut) {
             nextOut = newNextOut;
         }
@@ -87,51 +103,65 @@ public:
         }
     }
 
-private:
-    InboundLink<In>* nextIn = nullptr;
-    OutboundLink<Out>* nextOut = nullptr;
-};
-
-template <class Out>
-class InboundContextImplement final
-    : public InboundLink<Out>
-    , public PipelineContext {
-public:
-    void SetNextIn(PipelineContext* context) override
+    void Write(In request) override
     {
-    }
-
-    void SetNextOut(PipelineContext* context) override
-    {
-        if (context == nullptr) {
-            nextOut = nullptr;
-            return;
-        }
-        auto newNextOut = dynamic_cast<OutboundLink<Out>*>(context);
-        if (newNextOut) {
-            nextOut = newNextOut;
-        }
-        else {
-            throw std::invalid_argument("error");
+        auto result = handler->Execute(request);
+        if (nextOut) {
+            nextOut->Write(result);
         }
     }
 
 private:
-    OutboundLink<Out>* nextOut;
+    std::shared_ptr<HandlerType> handler;
+    OutboundLink<In>* nextIn = nullptr;
+    InboundLink<Out>* nextOut = nullptr;
 };
 
 template <class In>
-class OutboundContextImplement final
-    : public OutboundLink<In>
+class InboundContextImplement final
+    : public InboundLink<In>
     , public PipelineContext {
 public:
-    void SetNextIn(PipelineContext* context) override
+    void SetPrevIn(PipelineContext* context) override
     {
         if (context == nullptr) {
             nextIn = nullptr;
             return;
         }
-        auto newNextIn = dynamic_cast<InboundLink<In>*>(context);
+        auto newNextIn = dynamic_cast<OutboundLink<In>*>(context);
+        if (newNextIn) {
+            nextIn = newNextIn;
+        }
+        else {
+            throw std::invalid_argument("error");
+        }
+    }
+
+    void SetNextOut(PipelineContext* context) override
+    {
+    }
+
+    void Write(In request) override
+    {
+        throw std::invalid_argument("not found");
+    }
+
+private:
+    OutboundLink<In>* nextIn;
+};
+
+template <class PipeOut>
+class OutboundContextImplement final
+    : public OutboundLink<PipeOut>
+    , public PipelineContext {
+public:
+    void SetPrevIn(PipelineContext* context) override
+    {
+        if (context == nullptr) {
+            nextIn = nullptr;
+            return;
+        }
+        auto newNextIn = dynamic_cast<InboundLink<PipeOut>*>(context);
         if (newNextIn) {
             nextIn = newNextIn;
         }
@@ -145,154 +175,97 @@ public:
     }
 
 private:
-    InboundLink<In>* nextIn;
+    InboundLink<PipeOut>* nextIn;
 };
 
-template <class Handler>
-class HandlerWrapper final : public HandlerWrapperBase {
-public:
-    using Context = typename Handler::Context;
-    Context context;
-    std::shared_ptr<Handler> handler;
-
-    explicit HandlerWrapper(std::shared_ptr<Handler> handlerIn)
-    {
-        handler = handlerIn;
-    }
-
-    void Execute()
-    {
-
-    }
-};
-
-template <typename In>
+template <class In, class Out>
 class Pipeline {
 public:
-    template <class Handler>
-    void AddBack(std::shared_ptr<Handler> handler)
+    template <class HandlerType>
+    void AddBack(std::shared_ptr<HandlerType> handler)
     {
-        auto wrapper = std::make_unique<HandlerWrapper<Handler>>(handler);
-        handlers.push_back(std::move(wrapper));
+        static_assert(std::is_base_of<HandlerBase, HandlerType>::value, "");
+        using InType = typename HandlerType::In;
+        using OutType = typename HandlerType::Out;
+        using Context = ContextImplement<InType, OutType>;
+        auto context = std::make_shared<Context>(handler);
+        contexts.push_back(std::move(context));
     }
 
-    void Close()
+    void Build()
     {
-
-    }
-
-    void Execute(In input)
-    {
-        if (handlers.empty()) {
+        front = nullptr;
+        back = nullptr;
+        if (contexts.empty()) {
             return;
+        }
+        front = dynamic_cast<InboundLink<In>*>(contexts.front().get());
+        back = dynamic_cast<OutboundLink<Out>*>(contexts.back().get());
+        for (size_t i = 0; i < contexts.size() - 1; i++) {
+            contexts[i]->SetNextOut(contexts[i + 1].get());
+            contexts[i + 1]->SetPrevIn(contexts[i].get());
+        }
+    }
+
+    void Write(In input)
+    {
+        if (contexts.empty()) {
+            return;
+        }
+        if (front) {
+            front->Write(input);
         }
     }
 
 private:
-    std::vector<std::unique_ptr<HandlerWrapperBase>> handlers;
+    std::vector<std::shared_ptr<PipelineContext>> contexts;
+    InboundLink<In>* front;
+    OutboundLink<Out>* back;
 };
 
-//struct FirstHandler {
-//    typedef InboundHandlerContext<std::string, std::string> Context;
-//
-//    std::string Execute(std::string text)
-//    {
-//        return text + text;
-//    }
-//};
-//
-//struct SecondHandler {
-//    typedef BothHandlerContext<std::string, int> Context;
-//
-//    int Execute(std::string s)
-//    {
-//        return static_cast<int>(s.size());
-//    }
-//};
-//
-//struct ThirdHandler {
-//    typedef OutboundHandlerContext<int, std::string> Context;
-//
-//    std::string Execute(int count)
-//    {
-//        std::cout << std::to_string(count) << std::endl;
-//        return std::to_string(count);
-//    }
-//};
-//
-//void TestCase()
-//{
-//    auto pipeline = std::make_shared<Pipeline<std::string>>();
-//    pipeline->AddBack(std::make_shared<FirstHandler>());
-//    pipeline->AddBack(std::make_shared<SecondHandler>());
-//    pipeline->AddBack(std::make_shared<ThirdHandler>());
-//    pipeline->Close();
-//
-//    pipeline->Execute("miyako");
-//}
-
-void pipeContext(PipelineContext* in, PipelineContext* out)
-{
-    in->SetNextOut(out);
-    out->SetNextIn(in);
-}
-
-void TestCase_Pipe()
-{
-    auto context1 = std::make_shared<InboundContextImplement<std::string>>();
-    auto context2 = std::make_shared<ContextImplement<std::string, int>>();
-    auto context3 = std::make_shared<OutboundContextImplement<int>>();
-
-    pipeContext(context1.get(), context2.get());
-    pipeContext(context2.get(), context3.get());
-}
-
-//template <class T>
-//class ProcessorContext {
-//public:
-//    void wrtie(T)
-//    {
-//    }
-//};
-
-class EchoClientHandler {
+class Handler1 final : public Handler<std::string, int> {
 public:
-    void read(std::string text)
+    int Execute(std::string text) override
     {
+        return (int)text.size();
     }
 };
 
-class SimpleClient {
+class Handler2 final : public Handler<int, std::string> {
 public:
-    void SetPipeline(std::shared_ptr<Pipeline<std::string>>)
+    std::string Execute(int count) override
     {
+        return std::to_string(count);
     }
+};
 
-    std::shared_ptr<Pipeline<std::string>> GetPipeline()
+class StdOutHandler final : public Handler<std::string, std::string> {
+public:
+    std::string Execute(std::string text) override
     {
-        return {};
+        std::cout << text << std::endl;
+        return text;
     }
 };
 
 void TestCase_Trivials()
 {
-    SimpleClient client;
-    client.SetPipeline([]() -> std::shared_ptr<Pipeline<std::string>> {
-        auto pipeline = std::make_shared<Pipeline<std::string>>();
-        pipeline->AddBack(std::make_shared<EchoClientHandler>());
-        pipeline->Close();
-        return std::move(pipeline);
-    }());
+    auto pipeline = std::make_shared<Pipeline<std::string, std::string>>();
+    pipeline->AddBack(std::make_shared<Handler1>());
+    pipeline->AddBack(std::make_shared<Handler2>());
+    pipeline->AddBack(std::make_shared<StdOutHandler>());
+    pipeline->Build();
 
-    auto pipeline = client.GetPipeline();
     pipeline->Write("hi");
+    pipeline->Write("hihi");
+    pipeline->Write("hihihi");
 }
 
 } // unnamed namespace
 
 int main(int argc, char *argv[])
 {
-    TestCase_Pipe();
-//    TestCase();
+    TestCase_Trivials();
+    printf("ok\n");
     return 0;
 }
