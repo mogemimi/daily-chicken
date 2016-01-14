@@ -1,302 +1,186 @@
 // Copyright (c) 2016 mogemimi. Distributed under the MIT license.
 
+#include "../daily/Optional.h"
+#include "../nazuna/Defer.h"
+#include "../daily/StringHelper.h"
 #include <iostream>
 #include <fstream>
-#include <regex>
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/uio.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <string>
+#include <vector>
+#include <cassert>
+#include <thread>
 
 namespace {
 
-class HandlerBase {
-public:
-    virtual ~HandlerBase() = default;
+enum class AddressFamily {
+    InterNetwork,
+    //InterNetworkV6,
 };
 
-template <class In, class Out>
-class ContextImplement;
-
-template <class In>
-class InboundContextImplement;
-
-template <class PipeOut>
-class OutboundContextImplement;
-
-template <class In, class Out>
-class Handler : public HandlerBase {
-public:
-    using Context = ContextImplement<In, Out>;
-
-    virtual ~Handler() = default;
-
-    virtual Out Execute(In in) = 0;
+enum class ProtocolType {
+    IPv4,
+    //IPv6,
+    //Tcp,
+    //Udp,
 };
 
-template <class In>
-class InboundHandler : public HandlerBase {
-public:
-    using Context = InboundContextImplement<In>;
-
-    virtual ~InboundHandler() = default;
-
-    virtual void Execute(In in) = 0;
-};
-
-template <class Out>
-class OutboundHandler : public HandlerBase {
-public:
-    using Context = InboundContextImplement<Out>;
-
-    virtual ~OutboundHandler() = default;
-
-    virtual Out Execute() = 0;
-};
-
-template <class In>
-class InboundHandlerContext {
-public:
-};
-
-template <class In, class Out>
-class BothHandlerContext {
-public:
-};
-
-template <class Out>
-class OutboundHandlerContext {
-public:
-};
-
-template <class In>
-class InboundLink {
-public:
-    virtual ~InboundLink() = default;
-
-    virtual void Write(In request) = 0;
-};
-
-template <class Out>
-class OutboundLink {
-public:
-    virtual ~OutboundLink() = default;
-};
-
-class PipelineContext {
-public:
-    virtual ~PipelineContext() = default;
-
-    virtual void SetPrevIn(PipelineContext* context) = 0;
-
-    virtual void SetNextOut(PipelineContext* context) = 0;
-};
-
-template <class In, class Out>
-class ContextImplement final
-    : public InboundLink<In>
-    , public OutboundLink<Out>
-    , public PipelineContext {
-public:
-    using HandlerType = Handler<In, Out>;
-
-    explicit ContextImplement(std::shared_ptr<HandlerType> handlerIn)
-        : handler(handlerIn)
-    {
-    }
-
-    void SetPrevIn(PipelineContext* context) override
-    {
-        if (context == nullptr) {
-            nextIn = nullptr;
-            return;
-        }
-        auto newNextIn = dynamic_cast<OutboundLink<In>*>(context);
-        if (newNextIn) {
-            nextIn = newNextIn;
-        }
-        else {
-            throw std::invalid_argument("error");
-        }
-    }
-
-    void SetNextOut(PipelineContext* context) override
-    {
-        if (context == nullptr) {
-            nextOut = nullptr;
-            return;
-        }
-        auto newNextOut = dynamic_cast<InboundLink<Out>*>(context);
-        if (newNextOut) {
-            nextOut = newNextOut;
-        }
-        else {
-            throw std::invalid_argument("error");
-        }
-    }
-
-    void Write(In request) override
-    {
-        auto result = handler->Execute(request);
-        if (nextOut) {
-            nextOut->Write(result);
-        }
-    }
-
-private:
-    std::shared_ptr<HandlerType> handler;
-    OutboundLink<In>* nextIn = nullptr;
-    InboundLink<Out>* nextOut = nullptr;
-};
-
-template <class In>
-class InboundContextImplement final
-    : public InboundLink<In>
-    , public PipelineContext {
-public:
-    using HandlerType = InboundHandler<In>;
-
-    explicit InboundContextImplement(std::shared_ptr<HandlerType> handlerIn)
-        : handler(handlerIn)
-    {
-    }
-
-    void SetPrevIn(PipelineContext* context) override
-    {
-        if (context == nullptr) {
-            nextIn = nullptr;
-            return;
-        }
-        auto newNextIn = dynamic_cast<OutboundLink<In>*>(context);
-        if (newNextIn) {
-            nextIn = newNextIn;
-        }
-        else {
-            throw std::invalid_argument("error");
-        }
-    }
-
-    void SetNextOut(PipelineContext* context) override
-    {
-    }
-
-    void Write(In request) override
-    {
-        handler->Execute(request);
-    }
-
-private:
-    std::shared_ptr<HandlerType> handler;
-    OutboundLink<In>* nextIn;
-};
-
-template <class PipeOut>
-class OutboundContextImplement final
-    : public OutboundLink<PipeOut>
-    , public PipelineContext {
-public:
-    void SetPrevIn(PipelineContext* context) override
-    {
-        if (context == nullptr) {
-            nextIn = nullptr;
-            return;
-        }
-        auto newNextIn = dynamic_cast<InboundLink<PipeOut>*>(context);
-        if (newNextIn) {
-            nextIn = newNextIn;
-        }
-        else {
-            throw std::invalid_argument("error");
-        }
-    }
-
-    void SetNextOut(PipelineContext* context) override
-    {
-    }
-
-private:
-    InboundLink<PipeOut>* nextIn;
-};
-
-template <class In, class Out>
-class Pipeline {
-public:
-    template <class HandlerType>
-    void AddBack(std::shared_ptr<HandlerType> handler)
-    {
-        static_assert(std::is_base_of<HandlerBase, HandlerType>::value, "");
-        using Context = typename HandlerType::Context;
-        auto context = std::make_shared<Context>(handler);
-        contexts.push_back(std::move(context));
-    }
-
-    void Build()
-    {
-        front = nullptr;
-        back = nullptr;
-        if (contexts.empty()) {
-            return;
-        }
-        front = dynamic_cast<InboundLink<In>*>(contexts.front().get());
-        back = dynamic_cast<OutboundLink<Out>*>(contexts.back().get());
-        for (size_t i = 0; i < contexts.size() - 1; i++) {
-            contexts[i]->SetNextOut(contexts[i + 1].get());
-            contexts[i + 1]->SetPrevIn(contexts[i].get());
-        }
-    }
-
-    void Write(In input)
-    {
-        if (contexts.empty()) {
-            return;
-        }
-        if (front) {
-            front->Write(input);
-        }
-    }
-
-private:
-    std::vector<std::shared_ptr<PipelineContext>> contexts;
-    InboundLink<In>* front;
-    OutboundLink<Out>* back;
-};
-
-class FirstFilterHandler final : public Handler<int, double> {
-public:
-    double Execute(int n) override
-    {
-        return static_cast<double>(n) * 0.5;
-    }
-};
-
-class SecondFilterHandler final : public Handler<double, std::string> {
-public:
-    std::string Execute(double count) override
-    {
-        return std::to_string(count);
-    }
-};
-
-class StdOutHandler final : public InboundHandler<std::string> {
-public:
-    void Execute(std::string text) override
-    {
-        std::cout << text << std::endl;
-    }
-};
-
-void TestCase_Trivials()
+sa_family_t ToAddressFamilyPOSIX(AddressFamily family)
 {
-    auto pipeline = std::make_shared<Pipeline<int, std::string>>();
-    pipeline->AddBack(std::make_shared<FirstFilterHandler>());
-    pipeline->AddBack(std::make_shared<SecondFilterHandler>());
-    pipeline->AddBack(std::make_shared<StdOutHandler>());
-    pipeline->Build();
-
-    pipeline->Write(42);
+    switch (family) {
+    case AddressFamily::InterNetwork: return PF_INET;
+    }
+    return PF_INET;
 }
+
+class Socket final {
+private:
+    somera::Optional<int> fileDescriptor_;
+    AddressFamily family_;
+    ProtocolType protocolType_;
+
+public:
+    Socket(AddressFamily family, ProtocolType protocolType)
+        : family_(family)
+        , protocolType_(protocolType)
+    {
+    }
+
+    void Bind()
+    {
+        assert(!fileDescriptor_);
+        fileDescriptor_ = ::socket(PF_INET, SOCK_STREAM, 0);
+
+        // Set the socket to nonblocking mode:
+        const int flags = ::fcntl(*fileDescriptor_, F_GETFL, 0);
+        ::fcntl(*fileDescriptor_, F_SETFL, flags | O_NONBLOCK);
+
+        struct sockaddr_in address;
+        std::memset(&address, 0, sizeof(address));
+        address.sin_family = ToAddressFamilyPOSIX(family_);
+        address.sin_port = htons(8000);
+        address.sin_addr.s_addr = htonl(INADDR_ANY);
+
+        ::bind(
+            *fileDescriptor_,
+            reinterpret_cast<struct sockaddr*>(&address),
+            sizeof(address));
+    }
+
+    int GetHandle() const
+    {
+        assert(fileDescriptor_);
+        return *fileDescriptor_;
+    }
+
+    Socket Accept()
+    {
+        assert(fileDescriptor_);
+        Socket client(family_, protocolType_);
+
+        struct sockaddr_in address;
+        std::memset(&address, 0, sizeof(address));
+        address.sin_family = PF_INET;
+        address.sin_port = htons(8000);
+        address.sin_addr.s_addr = htonl(INADDR_ANY);
+
+        socklen_t length = sizeof(address);
+
+        client.fileDescriptor_ = ::accept(
+            *fileDescriptor_,
+            reinterpret_cast<struct sockaddr*>(&address),
+            &length);
+
+        return std::move(client);
+    }
+
+    void Close()
+    {
+        if (fileDescriptor_) {
+            ::close(*fileDescriptor_);
+            fileDescriptor_ = somera::NullOpt;
+        }
+    }
+};
 
 } // unnamed namespace
 
 int main(int argc, char *argv[])
 {
-    TestCase_Trivials();
-    printf("Done.\n");
+    Socket server(AddressFamily::InterNetwork, ProtocolType::IPv4);
+
+    printf("%s\n", "=> Bind()");
+    server.Bind();
+    somera::Defer serverClose([&] {
+        server.Close();
+    });
+
+    printf("%s\n", "=> ::listen()");
+    ::listen(server.GetHandle(), 5);
+
+    std::vector<Socket> clients;
+    bool exitRequest = false;
+
+    while (!exitRequest) {
+        if (clients.size() < 5)
+        {
+            fd_set fds;
+            FD_ZERO(&fds);
+            FD_SET(server.GetHandle(), &fds);
+
+            struct timeval tv;
+            tv.tv_sec = 0;
+            tv.tv_usec = 0;
+
+            int clientCount = select(server.GetHandle() + 1, &fds, nullptr, nullptr, &tv);
+            if (clientCount == -1) {
+                // error
+                return -1;
+            }
+            assert(clientCount >= 0);
+            for (int i = 0; i < clientCount; i++) {
+                Socket client = server.Accept();
+                printf("%s\n", "=> Accept()");
+                clients.push_back(std::move(client));
+            }
+        }
+        for (auto & client : clients) {
+            std::vector<char> buffer(1024, 0);
+            ssize_t readSize = ::read(client.GetHandle(), buffer.data(), buffer.size() - 1);
+
+            if (readSize == -1) {
+                // error: Failed to receive
+                continue;
+            }
+
+            if (readSize <= 0) {
+                continue;
+            }
+
+            assert(readSize > 0);
+
+            std::string text(buffer.data(), readSize);
+            std::cout << "[client]" << text << std::endl;
+            if (somera::StringHelper::startWith(text, "exit")) {
+                std::cout << "[exit request]" << std::endl;
+                exitRequest = true;
+            }
+
+            ::write(client.GetHandle(), text.data(), text.size());
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+
+    for (auto & socket : clients) {
+        socket.Close();
+    }
+
+    printf("%s\n", "=> Done");
     return 0;
 }
