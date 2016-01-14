@@ -11,15 +11,43 @@ public:
     virtual ~HandlerBase() = default;
 };
 
-template <class PipeIn, class PipeOut>
+template <class In, class Out>
+class ContextImplement;
+
+template <class In>
+class InboundContextImplement;
+
+template <class PipeOut>
+class OutboundContextImplement;
+
+template <class In, class Out>
 class Handler : public HandlerBase {
 public:
-    using In = PipeIn;
-    using Out = PipeOut;
+    using Context = ContextImplement<In, Out>;
 
     virtual ~Handler() = default;
 
     virtual Out Execute(In in) = 0;
+};
+
+template <class In>
+class InboundHandler : public HandlerBase {
+public:
+    using Context = InboundContextImplement<In>;
+
+    virtual ~InboundHandler() = default;
+
+    virtual void Execute(In in) = 0;
+};
+
+template <class Out>
+class OutboundHandler : public HandlerBase {
+public:
+    using Context = InboundContextImplement<Out>;
+
+    virtual ~OutboundHandler() = default;
+
+    virtual Out Execute() = 0;
 };
 
 template <class In>
@@ -122,6 +150,13 @@ class InboundContextImplement final
     : public InboundLink<In>
     , public PipelineContext {
 public:
+    using HandlerType = InboundHandler<In>;
+
+    explicit InboundContextImplement(std::shared_ptr<HandlerType> handlerIn)
+        : handler(handlerIn)
+    {
+    }
+
     void SetPrevIn(PipelineContext* context) override
     {
         if (context == nullptr) {
@@ -143,10 +178,11 @@ public:
 
     void Write(In request) override
     {
-        throw std::invalid_argument("not found");
+        handler->Execute(request);
     }
 
 private:
+    std::shared_ptr<HandlerType> handler;
     OutboundLink<In>* nextIn;
 };
 
@@ -185,9 +221,7 @@ public:
     void AddBack(std::shared_ptr<HandlerType> handler)
     {
         static_assert(std::is_base_of<HandlerBase, HandlerType>::value, "");
-        using InType = typename HandlerType::In;
-        using OutType = typename HandlerType::Out;
-        using Context = ContextImplement<InType, OutType>;
+        using Context = typename HandlerType::Context;
         auto context = std::make_shared<Context>(handler);
         contexts.push_back(std::move(context));
     }
@@ -223,42 +257,39 @@ private:
     OutboundLink<Out>* back;
 };
 
-class Handler1 final : public Handler<std::string, int> {
+class FirstFilterHandler final : public Handler<int, double> {
 public:
-    int Execute(std::string text) override
+    double Execute(int n) override
     {
-        return (int)text.size();
+        return static_cast<double>(n) * 0.5;
     }
 };
 
-class Handler2 final : public Handler<int, std::string> {
+class SecondFilterHandler final : public Handler<double, std::string> {
 public:
-    std::string Execute(int count) override
+    std::string Execute(double count) override
     {
         return std::to_string(count);
     }
 };
 
-class StdOutHandler final : public Handler<std::string, std::string> {
+class StdOutHandler final : public InboundHandler<std::string> {
 public:
-    std::string Execute(std::string text) override
+    void Execute(std::string text) override
     {
         std::cout << text << std::endl;
-        return text;
     }
 };
 
 void TestCase_Trivials()
 {
-    auto pipeline = std::make_shared<Pipeline<std::string, std::string>>();
-    pipeline->AddBack(std::make_shared<Handler1>());
-    pipeline->AddBack(std::make_shared<Handler2>());
+    auto pipeline = std::make_shared<Pipeline<int, std::string>>();
+    pipeline->AddBack(std::make_shared<FirstFilterHandler>());
+    pipeline->AddBack(std::make_shared<SecondFilterHandler>());
     pipeline->AddBack(std::make_shared<StdOutHandler>());
     pipeline->Build();
 
-    pipeline->Write("hi");
-    pipeline->Write("hihi");
-    pipeline->Write("hihihi");
+    pipeline->Write(42);
 }
 
 } // unnamed namespace
@@ -266,6 +297,6 @@ void TestCase_Trivials()
 int main(int argc, char *argv[])
 {
     TestCase_Trivials();
-    printf("ok\n");
+    printf("Done.\n");
     return 0;
 }
