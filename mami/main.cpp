@@ -3,120 +3,164 @@
 #include "../daily/Optional.h"
 #include "../nazuna/Defer.h"
 #include "../daily/StringHelper.h"
-#include <iostream>
-#include <fstream>
+#include "Pipeline.h"
+#include "ContainerAlgorithm.h"
+#include "IPEndPoint.h"
+#include "Socket.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
-#include <netinet/in.h>
 #include <unistd.h>
-#include <fcntl.h>
+
 #include <string>
 #include <vector>
 #include <cassert>
 #include <thread>
+#include <array>
+#include <cstdint>
+#include <iostream>
+#include <tuple>
+
+using namespace somera;
 
 namespace {
 
-enum class AddressFamily {
-    InterNetwork,
-    //InterNetworkV6,
+template <typename T>
+struct ArrayView {
+    T* data = nullptr;
+    size_t size = 0;
 };
 
-enum class ProtocolType {
-    IPv4,
-    //IPv6,
-    //Tcp,
-    //Udp,
-};
-
-sa_family_t ToAddressFamilyPOSIX(AddressFamily family)
+template <typename T>
+ArrayView<T> MakeArrayView(T* data, size_t size)
 {
-    switch (family) {
-    case AddressFamily::InterNetwork: return PF_INET;
-    }
-    return PF_INET;
+    ArrayView<T> view;
+    view.data = data;
+    view.size = size;
+    return std::move(view);
 }
 
-class Socket final {
-private:
-    somera::Optional<int> fileDescriptor_;
-    AddressFamily family_;
-    ProtocolType protocolType_;
+struct Error {
+    somera::Optional<std::string> description;
+    somera::Optional<std::string> file;
+    somera::Optional<int> line;
 
-public:
-    Socket(AddressFamily family, ProtocolType protocolType)
-        : family_(family)
-        , protocolType_(protocolType)
+    operator bool() const noexcept
     {
+        return description.operator bool();
     }
 
-    void Bind()
-    {
-        assert(!fileDescriptor_);
-        fileDescriptor_ = ::socket(PF_INET, SOCK_STREAM, 0);
-
-        // Set the socket to nonblocking mode:
-        const int flags = ::fcntl(*fileDescriptor_, F_GETFL, 0);
-        ::fcntl(*fileDescriptor_, F_SETFL, flags | O_NONBLOCK);
-
-        struct sockaddr_in address;
-        std::memset(&address, 0, sizeof(address));
-        address.sin_family = ToAddressFamilyPOSIX(family_);
-        address.sin_port = htons(8000);
-        address.sin_addr.s_addr = htonl(INADDR_ANY);
-
-        ::bind(
-            *fileDescriptor_,
-            reinterpret_cast<struct sockaddr*>(&address),
-            sizeof(address));
-    }
-
-    int GetHandle() const
-    {
-        assert(fileDescriptor_);
-        return *fileDescriptor_;
-    }
-
-    Socket Accept()
-    {
-        assert(fileDescriptor_);
-        Socket client(family_, protocolType_);
-
-        struct sockaddr_in address;
-        std::memset(&address, 0, sizeof(address));
-        address.sin_family = PF_INET;
-        address.sin_port = htons(8000);
-        address.sin_addr.s_addr = htonl(INADDR_ANY);
-
-        socklen_t length = sizeof(address);
-
-        client.fileDescriptor_ = ::accept(
-            *fileDescriptor_,
-            reinterpret_cast<struct sockaddr*>(&address),
-            &length);
-
-        return std::move(client);
-    }
-
-    void Close()
-    {
-        if (fileDescriptor_) {
-            ::close(*fileDescriptor_);
-            fileDescriptor_ = somera::NullOpt;
-        }
-    }
+    static const Error NoError;
 };
 
-} // unnamed namespace
+const Error Error::NoError {};
 
-int main(int argc, char *argv[])
+Error MakeError(const std::string& description)
 {
-    Socket server(AddressFamily::InterNetwork, ProtocolType::IPv4);
+    Error error;
+    error.description = description;
+    return std::move(error);
+}
+
+class Session {
+public:
+    Session(Socket && socket)
+        : socket_(std::move(socket))
+    {
+    }
+
+    const Socket & GetSocket() const
+    {
+        return socket_;
+    }
+
+    Socket & GetSocket()
+    {
+        return socket_;
+    }
+
+    void Read()
+    {
+        if (!socket_.IsConnected()) {
+            return;
+        }
+
+        std::vector<uint8_t> buffer(1024, 0);
+        size_t readSize;
+        Optional<SocketError> errorCode;
+        std::tie(readSize, errorCode) = socket_.Receive(buffer.data(), buffer.size() - 1);
+
+        if (errorCode) {
+            if (*errorCode == SocketError::NotConnected) {
+                printf("%s\n", "=> graceful close socket");
+                socket_.Close();
+                return;
+            }
+            if (*errorCode == SocketError::Shutdown) {
+                printf("%s\n", "=> close socket");
+                socket_.Close();
+                return;
+            }
+        }
+        assert(!errorCode || *errorCode == SocketError::TimedOut);
+        if (readSize <= 0) {
+            return;
+        }
+        if (OnRead) {
+            OnRead(socket_, MakeArrayView<uint8_t>(buffer.data(), readSize));
+        }
+    }
+
+public:
+    std::function<void(Socket & socket, const ArrayView<uint8_t>&)> OnRead;
+
+private:
+    Socket socket_;
+};
+
+class IOService {
+public:
+    IOService();
+
+    void Run();
+
+    void SetMaxConnectionCount(int count);
+
+    void SetOnAccept(std::function<void(std::shared_ptr<Session>, const Error&)> onAccept);
+
+    void ExitEventLoop();
+
+private:
+    std::function<void(std::shared_ptr<Session>, const Error&)> onAccept_;
+    int maxConnectionCount;
+    bool exitRequest;
+};
+
+IOService::IOService()
+    : maxConnectionCount(10)
+    , exitRequest(false)
+{
+}
+
+void IOService::SetOnAccept(std::function<void(std::shared_ptr<Session>, const Error&)> onAccept)
+{
+    onAccept_ = std::move(onAccept);
+}
+
+void IOService::SetMaxConnectionCount(int count)
+{
+    assert(count > 0);
+    maxConnectionCount = count;
+}
+
+void IOService::Run()
+{
+    Socket server(ProtocolType::Tcp);
 
     printf("%s\n", "=> Bind()");
-    server.Bind();
+    const auto address = IPEndPoint::CreateFromV4("localhost", 8000);
+    server.Bind(address);
     somera::Defer serverClose([&] {
         server.Close();
     });
@@ -124,12 +168,10 @@ int main(int argc, char *argv[])
     printf("%s\n", "=> ::listen()");
     ::listen(server.GetHandle(), 5);
 
-    std::vector<Socket> clients;
-    bool exitRequest = false;
+    std::vector<std::shared_ptr<Session>> sessions;
 
     while (!exitRequest) {
-        if (clients.size() < 5)
-        {
+        if (static_cast<int>(sessions.size()) < maxConnectionCount) {
             fd_set fds;
             FD_ZERO(&fds);
             FD_SET(server.GetHandle(), &fds);
@@ -138,49 +180,73 @@ int main(int argc, char *argv[])
             tv.tv_sec = 0;
             tv.tv_usec = 0;
 
-            int clientCount = select(server.GetHandle() + 1, &fds, nullptr, nullptr, &tv);
+            int clientCount = ::select(server.GetHandle() + 1, &fds, nullptr, nullptr, &tv);
             if (clientCount == -1) {
                 // error
-                return -1;
+                throw std::runtime_error("Error: Failed to call ::select()");
             }
             assert(clientCount >= 0);
             for (int i = 0; i < clientCount; i++) {
                 Socket client = server.Accept();
-                printf("%s\n", "=> Accept()");
-                clients.push_back(std::move(client));
+                auto session = std::make_shared<Session>(std::move(client));
+                if (onAccept_) {
+                    onAccept_(session, Error::NoError);
+                }
+                sessions.push_back(std::move(session));
             }
         }
-        for (auto & client : clients) {
-            std::vector<char> buffer(1024, 0);
-            ssize_t readSize = ::read(client.GetHandle(), buffer.data(), buffer.size() - 1);
 
-            if (readSize == -1) {
-                // error: Failed to receive
-                continue;
-            }
-
-            if (readSize <= 0) {
-                continue;
-            }
-
-            assert(readSize > 0);
-
-            std::string text(buffer.data(), readSize);
-            std::cout << "[client]" << text << std::endl;
-            if (somera::StringHelper::startWith(text, "exit")) {
-                std::cout << "[exit request]" << std::endl;
-                exitRequest = true;
-            }
-
-            ::write(client.GetHandle(), text.data(), text.size());
+        for (auto & session : sessions) {
+            session->Read();
         }
+        somera::EraseIf(sessions, [](const std::shared_ptr<Session>& session) -> bool {
+            return !session->GetSocket().IsConnected();
+        });
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
-    for (auto & socket : clients) {
-        socket.Close();
-    }
+    sessions.clear();
+}
 
+void IOService::ExitEventLoop()
+{
+    exitRequest = true;
+}
+
+} // unnamed namespace
+
+int main(int argc, char *argv[])
+{
+    IOService service;
+    service.SetMaxConnectionCount(5);
+    service.SetOnAccept([&service](std::shared_ptr<Session> session, const Error& error) {
+        if (error) {
+            printf("%s\n", "=> Error: in OnAccept");
+            return;
+        }
+        printf("%s\n", "=> OnAccept");
+        printf(
+            "Address = %s, Port = %d\n",
+            session->GetSocket().GetEndPoint().GetAddressNumber().c_str(),
+            session->GetSocket().GetEndPoint().GetPort());
+        session->OnRead = [&service](Socket & socket, const ArrayView<uint8_t>& buffer) {
+            std::string text(reinterpret_cast<const char*>(buffer.data), buffer.size);
+
+            if (somera::StringHelper::startWith(text, "exit")) {
+                std::cout << "[client]: [exit]" << std::endl;
+                service.ExitEventLoop();
+            }
+            else {
+                std::cout
+                    << "[client]: [echo] = '"
+                    << StringHelper::trimRight(StringHelper::trimRight(text, '\n'), '\r')
+                    << "'" << std::endl;
+                socket.Send(text.data(), text.size());
+            }
+        };
+    });
+
+    service.Run();
     printf("%s\n", "=> Done");
     return 0;
 }

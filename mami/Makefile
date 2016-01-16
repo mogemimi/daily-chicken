@@ -2,6 +2,8 @@ PRODUCTNAME = mami
 HEADERS = ../daily/*.h *.h
 SOURCES = \
 	../daily/*.cpp \
+	IPEndPoint.cpp \
+	Socket.cpp \
 	main.cpp
 
 xcode:
