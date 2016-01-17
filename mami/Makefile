@@ -2,7 +2,9 @@ PRODUCTNAME = mami
 HEADERS = ../daily/*.h *.h
 SOURCES = \
 	../daily/*.cpp \
-	IPEndPoint.cpp \
+	Connection.cpp \
+	EndPoint.cpp \
+	IOService.cpp \
 	Socket.cpp \
 	main.cpp
 

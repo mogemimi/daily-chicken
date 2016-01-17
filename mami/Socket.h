@@ -3,7 +3,7 @@
 #pragma once
 
 #include "../daily/Optional.h"
-#include "IPEndPoint.h"
+#include "EndPoint.h"
 #include <cstdint>
 #include <string>
 #include <tuple>
@@ -11,8 +11,6 @@
 namespace somera {
 
 enum class ProtocolType {
-    //IPv4,
-    //IPv6,
     Tcp,
     //Udp,
 };
@@ -31,17 +29,19 @@ public:
 
     DescriptorPOSIX & operator=(DescriptorPOSIX && other);
 
-    void Bind(const IPEndPoint& endPoint);
+    void Bind(const EndPoint& endPoint);
 
-    int GetHandle() const;
+    std::tuple<bool, errno_t> Connect(const EndPoint& endPoint);
 
-    std::tuple<DescriptorPOSIX, IPEndPoint> Accept(ProtocolType protocolType);
+    std::tuple<DescriptorPOSIX, EndPoint> Accept(ProtocolType protocolType);
 
     void Close();
 
+    int GetHandle() const;
+
 private:
     ///@brief The file descriptor for socket
-    somera::Optional<int> descriptor_;
+    Optional<int> descriptor_;
 };
 
 } // namespace detail
@@ -54,6 +54,8 @@ enum class SocketError {
 
 class Socket final {
 public:
+    Socket();
+
     explicit Socket(ProtocolType protocolType);
 
     Socket(const Socket&) = delete;
@@ -65,7 +67,7 @@ public:
 
     ~Socket();
 
-    void Bind(const IPEndPoint& endPoint);
+    void Bind(const EndPoint& endPoint);
 
     Socket Accept();
 
@@ -76,16 +78,18 @@ public:
 
     void Send(const void* buffer, size_t size);
 
+    std::tuple<bool, errno_t> Connect(const EndPoint& endPoint);
+
     bool IsConnected() const;
 
     int GetHandle() const;
 
-    IPEndPoint GetEndPoint() const;
+    EndPoint GetEndPoint() const;
 
 private:
     using NativeDescriptorType = detail::DescriptorPOSIX;
     NativeDescriptorType descriptor_;
-    IPEndPoint endPoint_;
+    EndPoint endPoint_;
     ProtocolType protocolType_;
     bool isConnected_;
 };

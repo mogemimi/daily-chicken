@@ -18,7 +18,7 @@ struct AddressViewPOSIX final {
     ::socklen_t size = 0;
 };
 
-class IPEndPoint final {
+class EndPoint final {
 public:
     AddressFamily GetFamily() const;
 
@@ -28,11 +28,11 @@ public:
 
     int GetPort() const;
 
-    static IPEndPoint CreateFromAddressStorage(const ::sockaddr_storage& storage);
+    static EndPoint CreateFromAddressStorage(const ::sockaddr_storage& storage);
 
-    static IPEndPoint CreateFromV4(const std::string& internetAddress, uint16_t port);
+    static EndPoint CreateFromV4(const std::string& internetAddress, uint16_t port);
 
-    static IPEndPoint CreateFromV6(uint16_t port, uint32_t scopeId);
+    static EndPoint CreateFromV6(uint16_t port, uint32_t scopeId);
 
 private:
     AddressFamily family;

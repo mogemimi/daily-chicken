@@ -73,12 +73,10 @@ DescriptorPOSIX & DescriptorPOSIX::operator=(DescriptorPOSIX && other)
     return *this;
 }
 
-void DescriptorPOSIX::Bind(const IPEndPoint& endPoint)
+void DescriptorPOSIX::Bind(const EndPoint& endPoint)
 {
     assert(!descriptor_);
     descriptor_ = ::socket(PF_INET, SOCK_STREAM, 0);
-
-    assert(descriptor_);
 
     // Set the socket to nonblocking mode:
     SetNonBlockingPOSIX(*descriptor_, true);
@@ -88,13 +86,29 @@ void DescriptorPOSIX::Bind(const IPEndPoint& endPoint)
     ::bind(*descriptor_, address.data, address.size);
 }
 
-int DescriptorPOSIX::GetHandle() const
+std::tuple<bool, errno_t> DescriptorPOSIX::Connect(const EndPoint& endPoint)
 {
-    assert(descriptor_);
-    return *descriptor_;
+    assert(!descriptor_);
+    descriptor_ = ::socket(PF_INET, SOCK_STREAM, 0);
+
+    // Set the socket to nonblocking mode:
+    SetNonBlockingPOSIX(*descriptor_, true);
+    SetTimeoutPOSIX(*descriptor_, 5);
+
+    auto address = endPoint.GetAddressViewPOSIX();
+    auto result = ::connect(*descriptor_, address.data, address.size);
+    if (result < 0) {
+        const errno_t errorCode = errno;
+        assert(result == -1);
+        assert(errorCode != EBADF);
+        assert(errorCode != EFAULT);
+        assert(errorCode != ENOTSOCK);
+        return std::make_tuple(false, errorCode);
+    }
+    return std::make_tuple<bool, errno_t>(true, 0);
 }
 
-std::tuple<DescriptorPOSIX, IPEndPoint> DescriptorPOSIX::Accept(ProtocolType protocolType)
+std::tuple<DescriptorPOSIX, EndPoint> DescriptorPOSIX::Accept(ProtocolType protocolType)
 {
     assert(descriptor_);
     DescriptorPOSIX client;
@@ -107,7 +121,7 @@ std::tuple<DescriptorPOSIX, IPEndPoint> DescriptorPOSIX::Accept(ProtocolType pro
         reinterpret_cast<struct sockaddr*>(&address),
         &length);
 
-    auto endPoint = IPEndPoint::CreateFromAddressStorage(address);
+    auto endPoint = EndPoint::CreateFromAddressStorage(address);
     return std::make_tuple(std::move(client), std::move(endPoint));
 }
 
@@ -119,9 +133,21 @@ void DescriptorPOSIX::Close()
     }
 }
 
+int DescriptorPOSIX::GetHandle() const
+{
+    assert(descriptor_);
+    return *descriptor_;
+}
+
 } // namespace detail
 
 // MARK: Socket
+
+Socket::Socket()
+    : protocolType_(ProtocolType::Tcp)
+    , isConnected_(false)
+{
+}
 
 Socket::Socket(ProtocolType protocolType)
     : protocolType_(protocolType)
@@ -153,7 +179,7 @@ Socket::~Socket()
     this->Close();
 }
 
-void Socket::Bind(const IPEndPoint& endPoint)
+void Socket::Bind(const EndPoint& endPoint)
 {
     endPoint_ = endPoint;
     descriptor_.Bind(endPoint_);
@@ -163,7 +189,7 @@ void Socket::Bind(const IPEndPoint& endPoint)
 Socket Socket::Accept()
 {
     NativeDescriptorType descriptor;
-    IPEndPoint endPoint;
+    EndPoint endPoint;
     std::tie(descriptor, endPoint) = descriptor_.Accept(protocolType_);
 
     Socket socket(protocolType_);
@@ -234,12 +260,20 @@ void Socket::Send(const void* buffer, size_t size)
     ::write(descriptor_.GetHandle(), buffer, size);
 }
 
+std::tuple<bool, errno_t> Socket::Connect(const EndPoint& endPoint)
+{
+    assert(!isConnected_);
+    auto result = descriptor_.Connect(endPoint);
+    isConnected_ = true;
+    return std::move(result);
+}
+
 int Socket::GetHandle() const
 {
     return descriptor_.GetHandle();
 }
 
-IPEndPoint Socket::GetEndPoint() const
+EndPoint Socket::GetEndPoint() const
 {
     return endPoint_;
 }

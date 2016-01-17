@@ -13,4 +13,16 @@ void EraseIf(Container & c, Func f)
     c.erase(std::remove_if(std::begin(c), std::end(c), f), std::end(c));
 }
 
+template <class Container, class T>
+auto Find(Container & c, const T& value)
+{
+    return std::find(std::begin(c), std::end(c), value);
+}
+
+template <class Container, class Func>
+auto FindIf(Container & c, Func f)
+{
+    return std::find_if(std::begin(c), std::end(c), f);
+}
+
 } // namespace somera

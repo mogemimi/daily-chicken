@@ -1,6 +1,6 @@
 // Copyright (c) 2016 mogemimi. Distributed under the MIT license.
 
-#include "IPEndPoint.h"
+#include "EndPoint.h"
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <cassert>
@@ -21,14 +21,14 @@ sa_family_t ToAddressFamilyPOSIX(AddressFamily family)
 
 } // unnamed namespace
 
-AddressFamily IPEndPoint::GetFamily() const
+AddressFamily EndPoint::GetFamily() const
 {
     return family;
 }
 
-IPEndPoint IPEndPoint::CreateFromV4(const std::string& internetAddress, uint16_t port)
+EndPoint EndPoint::CreateFromV4(const std::string& internetAddress, uint16_t port)
 {
-    IPEndPoint endPoint;
+    EndPoint endPoint;
     endPoint.family = AddressFamily::InterNetwork;
     std::memset(&endPoint.address, 0, sizeof(endPoint.address));
 
@@ -52,9 +52,9 @@ IPEndPoint IPEndPoint::CreateFromV4(const std::string& internetAddress, uint16_t
     return std::move(endPoint);
 }
 
-IPEndPoint IPEndPoint::CreateFromV6(uint16_t port, uint32_t scopeId)
+EndPoint EndPoint::CreateFromV6(uint16_t port, uint32_t scopeId)
 {
-    IPEndPoint endPoint;
+    EndPoint endPoint;
     endPoint.family = AddressFamily::InterNetworkV6;
     std::memset(&endPoint.address, 0, sizeof(address));
     auto & v6 = endPoint.address.asV6;
@@ -64,9 +64,9 @@ IPEndPoint IPEndPoint::CreateFromV6(uint16_t port, uint32_t scopeId)
     return std::move(endPoint);
 }
 
-IPEndPoint IPEndPoint::CreateFromAddressStorage(const ::sockaddr_storage& storage)
+EndPoint EndPoint::CreateFromAddressStorage(const ::sockaddr_storage& storage)
 {
-    IPEndPoint endPoint;
+    EndPoint endPoint;
     std::memset(&endPoint.address, 0, sizeof(address));
 
     assert(storage.ss_family == AF_INET || storage.ss_family == AF_INET6);
@@ -81,7 +81,7 @@ IPEndPoint IPEndPoint::CreateFromAddressStorage(const ::sockaddr_storage& storag
     return std::move(endPoint);
 }
 
-AddressViewPOSIX IPEndPoint::GetAddressViewPOSIX() const
+AddressViewPOSIX EndPoint::GetAddressViewPOSIX() const
 {
     if (family == AddressFamily::InterNetwork) {
         AddressViewPOSIX view;
@@ -96,7 +96,7 @@ AddressViewPOSIX IPEndPoint::GetAddressViewPOSIX() const
     return std::move(view);
 }
 
-std::string IPEndPoint::GetAddressNumber() const
+std::string EndPoint::GetAddressNumber() const
 {
     if (family == AddressFamily::InterNetwork) {
         return ::inet_ntoa(address.asV4.sin_addr);
@@ -113,7 +113,7 @@ std::string IPEndPoint::GetAddressNumber() const
         numericName.size());
 }
 
-int IPEndPoint::GetPort() const
+int EndPoint::GetPort() const
 {
     if (family == AddressFamily::InterNetwork) {
         return ntohs(address.asV4.sin_port);

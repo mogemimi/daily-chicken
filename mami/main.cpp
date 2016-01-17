@@ -1,252 +1,119 @@
 // Copyright (c) 2016 mogemimi. Distributed under the MIT license.
 
-#include "../daily/Optional.h"
-#include "../nazuna/Defer.h"
-#include "../daily/StringHelper.h"
-#include "Pipeline.h"
-#include "ContainerAlgorithm.h"
-#include "IPEndPoint.h"
-#include "Socket.h"
-
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/uio.h>
-#include <unistd.h>
-
-#include <string>
-#include <vector>
-#include <cassert>
-#include <thread>
-#include <array>
-#include <cstdint>
-#include <iostream>
-#include <tuple>
+#include "IOService.h"
+#include "CommandLineParser.h"
 
 using namespace somera;
 
 namespace {
 
-template <typename T>
-struct ArrayView {
-    T* data = nullptr;
-    size_t size = 0;
-};
-
-template <typename T>
-ArrayView<T> MakeArrayView(T* data, size_t size)
+void SetupCommandLineParser(CommandLineParser & parser)
 {
-    ArrayView<T> view;
-    view.data = data;
-    view.size = size;
-    return std::move(view);
+    using somera::CommandLineArgumentType::Flag;
+    using somera::CommandLineArgumentType::JoinedOrSeparate;
+    parser.setUsageText("mami [options ...]");
+    parser.addArgument("-h", Flag, "Display available options");
+    parser.addArgument("-help", Flag, "Display available options");
+    parser.addArgument("-s", Flag, "server");
+    parser.addArgument("-c", Flag, "client");
+    parser.addArgument("port", JoinedOrSeparate, "port number (default is 8000)");
 }
 
-struct Error {
-    somera::Optional<std::string> description;
-    somera::Optional<std::string> file;
-    somera::Optional<int> line;
-
-    operator bool() const noexcept
-    {
-        return description.operator bool();
-    }
-
-    static const Error NoError;
-};
-
-const Error Error::NoError {};
-
-Error MakeError(const std::string& description)
+void Log(const std::string& text)
 {
-    Error error;
-    error.description = description;
-    return std::move(error);
+    std::puts(text.c_str());
 }
 
-class Session {
-public:
-    Session(Socket && socket)
-        : socket_(std::move(socket))
-    {
-    }
-
-    const Socket & GetSocket() const
-    {
-        return socket_;
-    }
-
-    Socket & GetSocket()
-    {
-        return socket_;
-    }
-
-    void Read()
-    {
-        if (!socket_.IsConnected()) {
-            return;
-        }
-
-        std::vector<uint8_t> buffer(1024, 0);
-        size_t readSize;
-        Optional<SocketError> errorCode;
-        std::tie(readSize, errorCode) = socket_.Receive(buffer.data(), buffer.size() - 1);
-
-        if (errorCode) {
-            if (*errorCode == SocketError::NotConnected) {
-                printf("%s\n", "=> graceful close socket");
-                socket_.Close();
-                return;
-            }
-            if (*errorCode == SocketError::Shutdown) {
-                printf("%s\n", "=> close socket");
-                socket_.Close();
-                return;
-            }
-        }
-        assert(!errorCode || *errorCode == SocketError::TimedOut);
-        if (readSize <= 0) {
-            return;
-        }
-        if (OnRead) {
-            OnRead(socket_, MakeArrayView<uint8_t>(buffer.data(), readSize));
-        }
-    }
-
-public:
-    std::function<void(Socket & socket, const ArrayView<uint8_t>&)> OnRead;
-
-private:
-    Socket socket_;
-};
-
-class IOService {
-public:
-    IOService();
-
-    void Run();
-
-    void SetMaxConnectionCount(int count);
-
-    void SetOnAccept(std::function<void(std::shared_ptr<Session>, const Error&)> onAccept);
-
-    void ExitEventLoop();
-
-private:
-    std::function<void(std::shared_ptr<Session>, const Error&)> onAccept_;
-    int maxConnectionCount;
-    bool exitRequest;
-};
-
-IOService::IOService()
-    : maxConnectionCount(10)
-    , exitRequest(false)
+void RunServer(uint16_t port)
 {
-}
+    IOService service;
 
-void IOService::SetOnAccept(std::function<void(std::shared_ptr<Session>, const Error&)> onAccept)
-{
-    onAccept_ = std::move(onAccept);
-}
+    TcpServerSocket socket(service);
+    socket.Bind(EndPoint::CreateFromV4("localhost", port));
+    socket.Listen(5, [](Socket & client, const Error&) {
+        Log(StringHelper::format("Listen: client = { fd : %d }", client.GetHandle()));
+    });
+    socket.Read([](Socket & client, const ArrayView<uint8_t>& view) {
+        std::string text(reinterpret_cast<const char*>(view.data), view.size);
+        text = StringHelper::trimRight(text, '\n');
+        text = StringHelper::trimRight(text, '\r');
+        text = StringHelper::trimRight(text, '\n');
 
-void IOService::SetMaxConnectionCount(int count)
-{
-    assert(count > 0);
-    maxConnectionCount = count;
-}
-
-void IOService::Run()
-{
-    Socket server(ProtocolType::Tcp);
-
-    printf("%s\n", "=> Bind()");
-    const auto address = IPEndPoint::CreateFromV4("localhost", 8000);
-    server.Bind(address);
-    somera::Defer serverClose([&] {
-        server.Close();
+        Log(StringHelper::format(
+            "Read: client = { fd : %d, result = %s }",
+            client.GetHandle(),
+            text.c_str()));
     });
 
-    printf("%s\n", "=> ::listen()");
-    ::listen(server.GetHandle(), 5);
-
-    std::vector<std::shared_ptr<Session>> sessions;
-
-    while (!exitRequest) {
-        if (static_cast<int>(sessions.size()) < maxConnectionCount) {
-            fd_set fds;
-            FD_ZERO(&fds);
-            FD_SET(server.GetHandle(), &fds);
-
-            struct timeval tv;
-            tv.tv_sec = 0;
-            tv.tv_usec = 0;
-
-            int clientCount = ::select(server.GetHandle() + 1, &fds, nullptr, nullptr, &tv);
-            if (clientCount == -1) {
-                // error
-                throw std::runtime_error("Error: Failed to call ::select()");
-            }
-            assert(clientCount >= 0);
-            for (int i = 0; i < clientCount; i++) {
-                Socket client = server.Accept();
-                auto session = std::make_shared<Session>(std::move(client));
-                if (onAccept_) {
-                    onAccept_(session, Error::NoError);
-                }
-                sessions.push_back(std::move(session));
-            }
-        }
-
-        for (auto & session : sessions) {
-            session->Read();
-        }
-        somera::EraseIf(sessions, [](const std::shared_ptr<Session>& session) -> bool {
-            return !session->GetSocket().IsConnected();
-        });
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    }
-
-    sessions.clear();
+    Log("Run");
+    service.Run();
 }
 
-void IOService::ExitEventLoop()
+void RunClient(uint16_t port)
 {
-    exitRequest = true;
+    IOService service;
+
+    TcpSocket socket(service);
+    auto onConnected = [](Socket & client, const Error& error) {
+        if (error) {
+            Log(error.What());
+            return;
+        }
+        Log("Connected.");
+
+        std::string text = "Hello, socket!";
+        client.Send(text.data(), text.size());
+    };
+    socket.Connect(EndPoint::CreateFromV4("localhost", port), onConnected);
+    socket.Read([](Socket & client, const ArrayView<uint8_t>& view) {
+        std::string text(reinterpret_cast<const char*>(view.data), view.size);
+        text = StringHelper::trimRight(text, '\n');
+        text = StringHelper::trimRight(text, '\r');
+        text = StringHelper::trimRight(text, '\n');
+
+        Log(StringHelper::format(
+            "Read: server = { fd : %d, result = %s }",
+            client.GetHandle(),
+            text.c_str()));
+    });
+
+    Log("Run");
+    service.Run();
 }
 
 } // unnamed namespace
 
 int main(int argc, char *argv[])
 {
-    IOService service;
-    service.SetMaxConnectionCount(5);
-    service.SetOnAccept([&service](std::shared_ptr<Session> session, const Error& error) {
-        if (error) {
-            printf("%s\n", "=> Error: in OnAccept");
-            return;
+    somera::CommandLineParser parser;
+    SetupCommandLineParser(parser);
+    parser.parse(argc, argv);
+
+    if (parser.hasParseError()) {
+        std::cerr << parser.getErrorMessage() << std::endl;
+        return 1;
+    }
+    if (parser.exists("-h") || parser.exists("-help")) {
+        std::cout << parser.getHelpText() << std::endl;
+        return 0;
+    }
+
+    uint16_t port = 8000;
+    if (auto p = parser.getValue("port")) {
+        try {
+            port = static_cast<uint16_t>(std::stoi(*p));
         }
-        printf("%s\n", "=> OnAccept");
-        printf(
-            "Address = %s, Port = %d\n",
-            session->GetSocket().GetEndPoint().GetAddressNumber().c_str(),
-            session->GetSocket().GetEndPoint().GetPort());
-        session->OnRead = [&service](Socket & socket, const ArrayView<uint8_t>& buffer) {
-            std::string text(reinterpret_cast<const char*>(buffer.data), buffer.size);
+        catch (const std::invalid_argument&) {
+            return 1;
+        }
+    }
+    if (parser.exists("-s")) {
+        RunServer(port);
+    }
+    else if (parser.exists("-c")) {
+        RunClient(port);
+    }
 
-            if (somera::StringHelper::startWith(text, "exit")) {
-                std::cout << "[client]: [exit]" << std::endl;
-                service.ExitEventLoop();
-            }
-            else {
-                std::cout
-                    << "[client]: [echo] = '"
-                    << StringHelper::trimRight(StringHelper::trimRight(text, '\n'), '\r')
-                    << "'" << std::endl;
-                socket.Send(text.data(), text.size());
-            }
-        };
-    });
-
-    service.Run();
-    printf("%s\n", "=> Done");
+    Log("Done");
     return 0;
 }
