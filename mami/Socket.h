@@ -17,6 +17,8 @@ enum class ProtocolType {
     //Udp,
 };
 
+namespace detail {
+
 class DescriptorPOSIX final {
 public:
     DescriptorPOSIX() = default;
@@ -41,6 +43,8 @@ private:
     ///@brief The file descriptor for socket
     somera::Optional<int> descriptor_;
 };
+
+} // namespace detail
 
 enum class SocketError {
     TimedOut,
@@ -79,7 +83,7 @@ public:
     IPEndPoint GetEndPoint() const;
 
 private:
-    using NativeDescriptorType = DescriptorPOSIX;
+    using NativeDescriptorType = detail::DescriptorPOSIX;
     NativeDescriptorType descriptor_;
     IPEndPoint endPoint_;
     ProtocolType protocolType_;

@@ -11,6 +11,7 @@
 #include <cassert>
 
 namespace somera {
+namespace detail {
 namespace {
 
 void SetNonBlockingPOSIX(int descriptor, bool nonBlocking)
@@ -56,6 +57,8 @@ void SetTimeoutPOSIX(int descriptor, time_t seconds)
 }
 
 } // unnamed namespace
+
+// MARK: DescriptorPOSIX
 
 DescriptorPOSIX::DescriptorPOSIX(DescriptorPOSIX && other)
 {
@@ -115,6 +118,10 @@ void DescriptorPOSIX::Close()
         descriptor_ = somera::NullOpt;
     }
 }
+
+} // namespace detail
+
+// MARK: Socket
 
 Socket::Socket(ProtocolType protocolType)
     : protocolType_(protocolType)
