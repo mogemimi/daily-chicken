@@ -4,6 +4,7 @@ SOURCES = \
 	../daily/*.cpp \
 	Connection.cpp \
 	EndPoint.cpp \
+	Error.cpp \
 	IOService.cpp \
 	Socket.cpp \
 	main.cpp

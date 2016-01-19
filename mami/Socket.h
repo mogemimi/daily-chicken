@@ -3,19 +3,26 @@
 #pragma once
 
 #include "../daily/Optional.h"
+#include "ArrayView.h"
+#include "Connection.h"
 #include "EndPoint.h"
+#include "Error.h"
+#include "IOService.h"
+#include <array>
+#include <chrono>
 #include <cstdint>
+#include <functional>
+#include <vector>
 #include <string>
 #include <tuple>
 
 namespace somera {
+namespace detail {
 
 enum class ProtocolType {
     Tcp,
     //Udp,
 };
-
-namespace detail {
 
 class DescriptorPOSIX final {
 public:
@@ -52,46 +59,101 @@ enum class SocketError {
     NotConnected,
 };
 
-class Socket final {
+class Socket {
 public:
-    Socket();
+    Socket() = default;
 
-    explicit Socket(ProtocolType protocolType);
+    Socket(IOService & service);
+
+    Socket(
+        IOService & service,
+        detail::DescriptorPOSIX && descriptor,
+        EndPoint && endPoint);
+
+    ~Socket();
 
     Socket(const Socket&) = delete;
     Socket & operator=(const Socket&) = delete;
 
     Socket(Socket && other);
-
     Socket & operator=(Socket && other);
 
-    ~Socket();
-
-    void Bind(const EndPoint& endPoint);
-
-    Socket Accept();
+    void Connect(const EndPoint& endPoint, std::function<void(Socket & socket, const Error&)> onConnected);
 
     void Close();
 
-    std::tuple<size_t, Optional<SocketError>>
-    Receive(void* buffer, size_t size);
+    void Read(const std::function<void(Socket&, const ArrayView<uint8_t>&)>& onRead);
 
-    void Send(const void* buffer, size_t size);
+//    void ReadError(const std::function<void(Socket&, const Error&)>& onReadError);
+//
+//    void Timeout(const std::function<void(Socket&)>& onReadError);
+//
+//    void Disconnect(const std::function<void(Socket&)>& onReadError);
 
-    std::tuple<bool, errno_t> Connect(const EndPoint& endPoint);
-
-    bool IsConnected() const;
-
-    int GetHandle() const;
+    void Write(const ArrayView<uint8_t const>& data);
 
     EndPoint GetEndPoint() const;
 
+    int GetHandle() const;
+
 private:
-    using NativeDescriptorType = detail::DescriptorPOSIX;
-    NativeDescriptorType descriptor_;
+    void ConnectEventLoop(const std::chrono::system_clock::time_point& startTime);
+
+    void ReadEventLoop();
+
+private:
+    using DescriptorType = detail::DescriptorPOSIX;
+    IOService* service_ = nullptr;
+    DescriptorType descriptor_;
     EndPoint endPoint_;
-    ProtocolType protocolType_;
-    bool isConnected_;
+    ScopedConnection connectionConnect_;
+    ScopedConnection connectionRead_;
+    std::function<void(Socket & socket, const Error&)> onConnected_;
+    std::function<void(Socket & socket, const ArrayView<uint8_t>& view)> onRead_;
+};
+
+class ServerSocket {
+public:
+    ServerSocket(IOService & service);
+
+    ~ServerSocket();
+
+    void Bind(const EndPoint& endPoint);
+
+    void Listen(int backlog, const std::function<void(Socket&, const Error&)>& onAccept);
+
+    void Close();
+
+    void Read(const std::function<void(Socket&, const ArrayView<uint8_t>&)>& onRead);
+
+//    void ReadError(const std::function<void(Socket&, const Error&)>& onReadError);
+//
+//    void Timeout(const std::function<void(Socket&)>& onReadError);
+//
+//    void Disconnect(const std::function<void(Socket&)>& onReadError);
+
+private:
+    void ListenEventLoop();
+
+    void ReadEventLoop();
+
+private:
+    struct TcpSession {
+        Socket socket;
+        bool isClosed = false;
+    };
+
+private:
+    using DescriptorType = detail::DescriptorPOSIX;
+    IOService* service_ = nullptr;
+    DescriptorType descriptor_;
+    EndPoint endPoint_;
+    std::vector<std::shared_ptr<TcpSession>> sessions_;
+    ScopedConnection connectionListen_;
+    ScopedConnection connectionRead_;
+    int maxSessionCount_ = 5;
+    std::function<void(Socket & socket, const Error&)> onAccept_;
+    std::function<void(Socket & socket, const ArrayView<uint8_t>& view)> onRead_;
 };
 
 } // namespace somera

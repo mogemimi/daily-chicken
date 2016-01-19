@@ -10,6 +10,15 @@
 #include <errno.h>
 #include <cassert>
 
+#include "../daily/StringHelper.h"
+#include "ContainerAlgorithm.h"
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/uio.h>
+#include <unistd.h>
+#include <cassert>
+#include <thread>
+
 namespace somera {
 namespace detail {
 namespace {
@@ -141,91 +150,21 @@ int DescriptorPOSIX::GetHandle() const
 
 } // namespace detail
 
-// MARK: Socket
-
-Socket::Socket()
-    : protocolType_(ProtocolType::Tcp)
-    , isConnected_(false)
-{
-}
-
-Socket::Socket(ProtocolType protocolType)
-    : protocolType_(protocolType)
-    , isConnected_(false)
-{
-}
-
-Socket::Socket(Socket && other)
-{
-    this->Close();
-    descriptor_ = std::move(other.descriptor_);
-    endPoint_ = other.endPoint_;
-    protocolType_ = other.protocolType_;
-    isConnected_ = other.isConnected_;
-}
-
-Socket & Socket::operator=(Socket && other)
-{
-    this->Close();
-    descriptor_ = std::move(other.descriptor_);
-    endPoint_ = other.endPoint_;
-    protocolType_ = other.protocolType_;
-    isConnected_ = other.isConnected_;
-    return *this;
-}
-
-Socket::~Socket()
-{
-    this->Close();
-}
-
-void Socket::Bind(const EndPoint& endPoint)
-{
-    endPoint_ = endPoint;
-    descriptor_.Bind(endPoint_);
-    isConnected_ = true;
-}
-
-Socket Socket::Accept()
-{
-    NativeDescriptorType descriptor;
-    EndPoint endPoint;
-    std::tie(descriptor, endPoint) = descriptor_.Accept(protocolType_);
-
-    Socket socket(protocolType_);
-    socket.descriptor_ = std::move(descriptor);
-    socket.endPoint_ = std::move(endPoint);
-    socket.isConnected_ = true;
-    return std::move(socket);
-}
-
-void Socket::Close()
-{
-    if (!isConnected_) {
-        return;
-    }
-    descriptor_.Close();
-    isConnected_ = false;
-}
+// MARK: unnamed namespace
+namespace {
 
 std::tuple<size_t, Optional<SocketError>>
-Socket::Receive(void* buffer, size_t size)
+ReadSocket(int descriptor, void* buffer, size_t size)
 {
     assert(buffer != nullptr);
     assert(size > 0);
-    assert(isConnected_);
-    if (!isConnected_) {
-        return std::make_tuple<size_t, Optional<SocketError>>(
-            0, SocketError::NotConnected);
-    }
 
     constexpr int flags = 0;
-    ssize_t readSize = ::recv(descriptor_.GetHandle(), buffer, size, flags);
+    ssize_t readSize = ::recv(descriptor, buffer, size, flags);
     const auto errorCode = errno;
 
     if (readSize == 0) {
         // NOTE: graceful close socket
-        this->Close();
         return std::make_tuple<size_t, Optional<SocketError>>(
             0, SocketError::Shutdown);
     }
@@ -240,7 +179,6 @@ Socket::Receive(void* buffer, size_t size)
         assert(errorCode != EINVAL && "Invalid argument");
         assert(errorCode != EFAULT);
         assert(errorCode != ENOTSOCK);
-        this->Close();
         return std::make_tuple<size_t, Optional<SocketError>>(
             0, SocketError::NotConnected);
     }
@@ -248,29 +186,110 @@ Socket::Receive(void* buffer, size_t size)
     return std::make_tuple<size_t, Optional<SocketError>>(readSize, NullOpt);
 }
 
-void Socket::Send(const void* buffer, size_t size)
-{
-    assert(buffer != nullptr);
-    assert(size > 0);
-    assert(isConnected_);
+} // unnamed namespace
 
-    if (!isConnected_) {
+// MARK: Socket
+
+Socket::Socket(IOService & service)
+    : service_(&service)
+{
+}
+
+Socket::Socket(
+    IOService & service,
+    detail::DescriptorPOSIX && descriptor,
+    EndPoint && endPoint)
+    : service_(&service)
+    , descriptor_(std::move(descriptor))
+    , endPoint_(std::move(endPoint))
+{
+}
+
+Socket::~Socket()
+{
+    descriptor_.Close();
+}
+
+Socket::Socket(Socket && other)
+{
+    this->Close();
+
+    service_ = std::move(other.service_);
+    descriptor_ = std::move(other.descriptor_);
+    endPoint_ = std::move(other.endPoint_);
+    connectionConnect_ = std::move(other.connectionConnect_);
+    connectionRead_ = std::move(other.connectionRead_);
+    onConnected_ = std::move(other.onConnected_);
+    onRead_ = std::move(other.onRead_);
+}
+
+Socket & Socket::operator=(Socket && other)
+{
+    this->Close();
+
+    service_ = std::move(other.service_);
+    descriptor_ = std::move(other.descriptor_);
+    endPoint_ = std::move(other.endPoint_);
+    connectionConnect_ = std::move(other.connectionConnect_);
+    connectionRead_ = std::move(other.connectionRead_);
+    onConnected_ = std::move(other.onConnected_);
+    onRead_ = std::move(other.onRead_);
+
+    return *this;
+}
+
+void Socket::Close()
+{
+    connectionConnect_.Disconnect();
+    connectionRead_.Disconnect();
+    descriptor_.Close();
+}
+
+void Socket::Connect(const EndPoint& endPoint, std::function<void(Socket & socket, const Error&)> onConnected)
+{
+    assert(onConnected);
+    onConnected_ = onConnected;
+
+    bool success;
+    errno_t errorCode;
+    std::tie(success, errorCode) = descriptor_.Connect(endPoint);
+    if (success) {
+        assert(service_ != nullptr);
+        connectionRead_ = service_->ScheduleTask([this]{ this->ReadEventLoop(); });
+        onConnected_(*this, {});
         return;
     }
-    ::write(descriptor_.GetHandle(), buffer, size);
+
+    if (errorCode != EINPROGRESS) {
+        onConnected_(*this, MakeError(StringHelper::format(
+            "Error: Failed to call connect(). code=%d, %s",
+            errorCode,
+            strerror(errorCode))));
+        return;
+    }
+
+    // NOTE: The non-blocking socket always returns 'EINPROGRESS' error.
+    assert(!success);
+    assert(errorCode == EINPROGRESS);
+
+    assert(service_ != nullptr);
+    auto now = std::chrono::system_clock::now();
+    connectionConnect_ = service_->ScheduleTask([this, now = now] {
+        this->ConnectEventLoop(now);
+    });
 }
 
-std::tuple<bool, errno_t> Socket::Connect(const EndPoint& endPoint)
+void Socket::Read(const std::function<void(Socket&, const ArrayView<uint8_t>&)>& onRead)
 {
-    assert(!isConnected_);
-    auto result = descriptor_.Connect(endPoint);
-    isConnected_ = true;
-    return std::move(result);
+    onRead_ = onRead;
 }
 
-int Socket::GetHandle() const
+void Socket::Write(const ArrayView<uint8_t const>& data)
 {
-    return descriptor_.GetHandle();
+    assert(data.data != nullptr);
+    assert(data.size > 0);
+
+    ::write(descriptor_.GetHandle(), data.data, data.size);
 }
 
 EndPoint Socket::GetEndPoint() const
@@ -278,9 +297,251 @@ EndPoint Socket::GetEndPoint() const
     return endPoint_;
 }
 
-bool Socket::IsConnected() const
+int Socket::GetHandle() const
 {
-    return isConnected_;
+    return descriptor_.GetHandle();
+}
+
+void Socket::ConnectEventLoop(const std::chrono::system_clock::time_point& startTime)
+{
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(descriptor_.GetHandle(), &fds);
+
+    auto result = ::select(descriptor_.GetHandle() + 1, nullptr, &fds, nullptr, nullptr);
+    auto code = errno;
+
+    if (result < 0 && code != EINTR) {
+        assert(result == -1);
+        onConnected_(*this, MakeError(StringHelper::format(
+            "Error: Failed to call select() : %d - %s",
+            code,
+            strerror(code))));
+        connectionConnect_.Disconnect();
+        printf("Line=%d\n", __LINE__);
+        return;
+    }
+
+    assert(result >= 0 || code == EINTR);
+    if (result <= 0) {
+        assert(result == 0);
+        onConnected_(*this, MakeError(StringHelper::format(
+            "Error: Failed to call select(), cancelling, code=%d, %s",
+            code,
+            strerror(code))));
+        connectionConnect_.Disconnect();
+        return;
+    }
+
+    if (code == ETIMEDOUT) {
+        const auto now = std::chrono::system_clock::now();
+        const auto timeout = std::chrono::seconds(10);
+        if (now - startTime >= timeout) {
+            onConnected_(*this, MakeError(StringHelper::format(
+                "Error: Timeout. socket error : %d - %s",
+                code,
+                strerror(code))));
+            connectionConnect_.Disconnect();
+        }
+        return;
+    }
+
+    int socketError;
+    socklen_t socketErrorSize = sizeof(socketError);
+
+    if (::getsockopt(descriptor_.GetHandle(), SOL_SOCKET, SO_ERROR,
+        static_cast<void*>(&socketError), &socketErrorSize) < 0) {
+        code = errno;
+        onConnected_(*this, MakeError(StringHelper::format(
+            "Error: Failed to call getsockopt() : %d - %s",
+            code,
+            strerror(code))));
+        connectionConnect_.Disconnect();
+        return;
+    }
+    if (socketError != 0) {
+        onConnected_(*this, MakeError(StringHelper::format(
+            "Error: socketError : %d - %s",
+            socketError,
+            strerror(socketError))));
+        connectionConnect_.Disconnect();
+        return;
+    }
+
+    // NOTE: Connected.
+    assert(service_ != nullptr);
+    connectionRead_ = service_->ScheduleTask([this]{ this->ReadEventLoop(); });
+    connectionConnect_.Disconnect();
+    onConnected_(*this, {});
+}
+
+void Socket::ReadEventLoop()
+{
+    std::vector<uint8_t> buffer(1024, 0);
+    size_t readSize;
+    Optional<SocketError> errorCode;
+    std::tie(readSize, errorCode) = ReadSocket(
+        descriptor_.GetHandle(), buffer.data(), buffer.size() - 1);
+
+    if (errorCode) {
+        switch (*errorCode) {
+        case SocketError::NotConnected: {
+            printf("%s\n", "=> graceful close socket");
+            this->Close();
+            return;
+        }
+        case SocketError::Shutdown: {
+            printf("%s\n", "=> close socket");
+            this->Close();
+            return;
+        }
+        case SocketError::TimedOut:
+            // NOTE: There is no data to be read yet
+            return;
+        }
+    }
+    assert(!errorCode || *errorCode == SocketError::TimedOut);
+    if (readSize <= 0) {
+        return;
+    }
+    if (onRead_) {
+        onRead_(*this, MakeArrayView<uint8_t>(buffer.data(), readSize));
+    }
+}
+
+// MARK: ServerSocket
+
+ServerSocket::ServerSocket(IOService & service)
+    : service_(&service)
+{}
+
+ServerSocket::~ServerSocket()
+{
+    this->Close();
+}
+
+void ServerSocket::Bind(const EndPoint& endPoint)
+{
+    descriptor_.Bind(endPoint);
+}
+
+void ServerSocket::Listen(int backlog, const std::function<void(Socket&, const Error&)>& onAccept)
+{
+    assert(backlog > 0);
+    ::listen(descriptor_.GetHandle(), backlog);
+
+    // TODO: Add error handling code here for listen()
+
+    assert(service_ != nullptr);
+    connectionListen_ = service_->ScheduleTask([this] { this->ListenEventLoop(); });
+    onAccept_ = onAccept;
+}
+
+void ServerSocket::Close()
+{
+    sessions_.clear();
+    connectionListen_.Disconnect();
+    connectionRead_.Disconnect();
+    descriptor_.Close();
+}
+
+void ServerSocket::Read(const std::function<void(Socket&, const ArrayView<uint8_t>&)>& onRead)
+{
+    onRead_ = onRead;
+}
+
+void ServerSocket::ListenEventLoop()
+{
+    if (static_cast<int>(sessions_.size()) >= maxSessionCount_) {
+        return;
+    }
+
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(descriptor_.GetHandle(), &fds);
+
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+
+    int clientCount = ::select(descriptor_.GetHandle() + 1, &fds, nullptr, nullptr, &tv);
+    if (clientCount == -1) {
+        // error
+        throw std::runtime_error("Error: Failed to call ::select()");
+    }
+    assert(clientCount >= 0);
+    if (clientCount == 0) {
+        return;
+    }
+
+    for (int i = 0; i < clientCount; i++) {
+        DescriptorType descriptor;
+        EndPoint endPoint;
+        std::tie(descriptor, endPoint) = descriptor_.Accept(detail::ProtocolType::Tcp);
+
+        Socket socket(*service_, std::move(descriptor), std::move(endPoint));
+
+        auto session = std::make_shared<TcpSession>();
+        session->socket = std::move(socket);
+        if (onAccept_) {
+            onAccept_(session->socket, {});
+        }
+        sessions_.push_back(std::move(session));
+    }
+
+    if (!connectionRead_) {
+        connectionRead_ = service_->ScheduleTask([this] { this->ReadEventLoop(); });
+    }
+}
+
+void ServerSocket::ReadEventLoop()
+{
+    if (sessions_.empty()) {
+        connectionRead_.Disconnect();
+        return;
+    }
+
+    for (auto & session : sessions_) {
+        assert(!session->isClosed);
+
+        std::vector<uint8_t> buffer(1024, 0);
+        size_t readSize;
+        Optional<SocketError> errorCode;
+        std::tie(readSize, errorCode) = ReadSocket(
+            session->socket.GetHandle(), buffer.data(), buffer.size() - 1);
+
+        if (errorCode) {
+            switch (*errorCode) {
+            case SocketError::NotConnected: {
+                printf("%s\n", "=> graceful close socket");
+                session->socket.Close();
+                session->isClosed = true;
+                continue;
+            }
+            case SocketError::Shutdown: {
+                printf("%s\n", "=> close socket");
+                session->socket.Close();
+                session->isClosed = true;
+                continue;
+            }
+            case SocketError::TimedOut:
+                // NOTE: There is no data to be read yet
+                continue;
+            }
+        }
+
+        assert(!errorCode || *errorCode == SocketError::TimedOut);
+        if (readSize <= 0) {
+            continue;
+        }
+        if (onRead_) {
+            onRead_(session->socket, MakeArrayView<uint8_t>(buffer.data(), readSize));
+        }
+    }
+
+    EraseIf(sessions_, [](const std::shared_ptr<TcpSession>& session) {
+        return session->isClosed;
+    });
 }
 
 } // namespace somera

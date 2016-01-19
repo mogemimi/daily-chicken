@@ -1,7 +1,10 @@
 // Copyright (c) 2016 mogemimi. Distributed under the MIT license.
 
 #include "IOService.h"
-#include "CommandLineParser.h"
+#include "Socket.h"
+#include "../daily/CommandLineParser.h"
+#include "../daily/StringHelper.h"
+#include <iostream>
 
 using namespace somera;
 
@@ -28,7 +31,7 @@ void RunServer(uint16_t port)
 {
     IOService service;
 
-    TcpServerSocket socket(service);
+    ServerSocket socket(service);
     socket.Bind(EndPoint::CreateFromV4("localhost", port));
     socket.Listen(5, [](Socket & client, const Error&) {
         Log(StringHelper::format("Listen: client = { fd : %d }", client.GetHandle()));
@@ -53,8 +56,7 @@ void RunClient(uint16_t port)
 {
     IOService service;
 
-    TcpSocket socket(service);
-    auto onConnected = [](Socket & client, const Error& error) {
+    auto onConnected = [](Socket & socket, const Error& error) {
         if (error) {
             Log(error.What());
             return;
@@ -62,10 +64,10 @@ void RunClient(uint16_t port)
         Log("Connected.");
 
         std::string text = "Hello, socket!";
-        client.Send(text.data(), text.size());
+        auto view = MakeArrayView(text.data(), text.size());
+        socket.Write(CastArrayView<uint8_t const>(view));
     };
-    socket.Connect(EndPoint::CreateFromV4("localhost", port), onConnected);
-    socket.Read([](Socket & client, const ArrayView<uint8_t>& view) {
+    auto onRead = [](Socket & socket, const ArrayView<uint8_t>& view) {
         std::string text(reinterpret_cast<const char*>(view.data), view.size);
         text = StringHelper::trimRight(text, '\n');
         text = StringHelper::trimRight(text, '\r');
@@ -73,9 +75,13 @@ void RunClient(uint16_t port)
 
         Log(StringHelper::format(
             "Read: server = { fd : %d, result = %s }",
-            client.GetHandle(),
+            socket.GetHandle(),
             text.c_str()));
-    });
+    };
+
+    Socket socket(service);
+    socket.Connect(EndPoint::CreateFromV4("localhost", port), onConnected);
+    socket.Read(onRead);
 
     Log("Run");
     service.Run();
