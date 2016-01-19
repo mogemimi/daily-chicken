@@ -566,10 +566,17 @@ void setDefaultBuildConfig(XCBuildConfiguration& config)
     config.addBuildSettings("GCC_C_LANGUAGE_STANDARD", "c11");
     config.addBuildSettings("GCC_NO_COMMON_BLOCKS", "YES");
     config.addBuildSettings("GCC_WARN_64_TO_32_BIT_CONVERSION", "YES");
+    config.addBuildSettings("GCC_WARN_ABOUT_MISSING_FIELD_INITIALIZERS", "YES");
+    config.addBuildSettings("GCC_WARN_ABOUT_MISSING_NEWLINE", "YES");
+    config.addBuildSettings("GCC_WARN_ABOUT_MISSING_PROTOTYPES", "YES");
     config.addBuildSettings("GCC_WARN_ABOUT_RETURN_TYPE", "YES_ERROR");
+    config.addBuildSettings("GCC_WARN_SHADOW", "YES");
+    config.addBuildSettings("GCC_WARN_SIGN_COMPARE", "YES");
     config.addBuildSettings("GCC_WARN_UNDECLARED_SELECTOR", "YES");
     config.addBuildSettings("GCC_WARN_UNINITIALIZED_AUTOS", "YES_AGGRESSIVE");
+    config.addBuildSettings("GCC_WARN_UNKNOWN_PRAGMAS", "YES");
     config.addBuildSettings("GCC_WARN_UNUSED_FUNCTION", "YES");
+    config.addBuildSettings("GCC_WARN_UNUSED_LABEL", "YES");
     config.addBuildSettings("GCC_WARN_UNUSED_VARIABLE", "YES");
     config.addBuildSettings("MACOSX_DEPLOYMENT_TARGET", "10.11");
     config.addBuildSettings("SDKROOT", "macosx");
