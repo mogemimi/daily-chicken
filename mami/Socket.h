@@ -138,7 +138,7 @@ private:
     void ReadEventLoop();
 
 private:
-    struct TcpSession {
+    struct Session {
         Socket socket;
         bool isClosed = false;
     };
@@ -148,7 +148,7 @@ private:
     IOService* service_ = nullptr;
     DescriptorType descriptor_;
     EndPoint endPoint_;
-    std::vector<std::shared_ptr<TcpSession>> sessions_;
+    std::vector<Session> sessions_;
     ScopedConnection connectionListen_;
     ScopedConnection connectionRead_;
     int maxSessionCount_ = 5;

@@ -481,10 +481,11 @@ void ServerSocket::ListenEventLoop()
 
         Socket socket(*service_, std::move(descriptor), std::move(endPoint));
 
-        auto session = std::make_shared<TcpSession>();
-        session->socket = std::move(socket);
+        Session session;
+        session.socket = std::move(socket);
+        session.isClosed = false;
         if (onAccept_) {
-            onAccept_(session->socket, {});
+            onAccept_(session.socket, {});
         }
         sessions_.push_back(std::move(session));
     }
@@ -502,26 +503,26 @@ void ServerSocket::ReadEventLoop()
     }
 
     for (auto & session : sessions_) {
-        assert(!session->isClosed);
+        assert(!session.isClosed);
 
         std::vector<uint8_t> buffer(1024, 0);
         size_t readSize;
         Optional<SocketError> errorCode;
         std::tie(readSize, errorCode) = ReadSocket(
-            session->socket.GetHandle(), buffer.data(), buffer.size() - 1);
+            session.socket.GetHandle(), buffer.data(), buffer.size() - 1);
 
         if (errorCode) {
             switch (*errorCode) {
             case SocketError::NotConnected: {
                 printf("%s\n", "=> graceful close socket");
-                session->socket.Close();
-                session->isClosed = true;
+                session.socket.Close();
+                session.isClosed = true;
                 continue;
             }
             case SocketError::Shutdown: {
                 printf("%s\n", "=> close socket");
-                session->socket.Close();
-                session->isClosed = true;
+                session.socket.Close();
+                session.isClosed = true;
                 continue;
             }
             case SocketError::TimedOut:
@@ -535,13 +536,11 @@ void ServerSocket::ReadEventLoop()
             continue;
         }
         if (onRead_) {
-            onRead_(session->socket, MakeArrayView<uint8_t>(buffer.data(), readSize));
+            onRead_(session.socket, MakeArrayView<uint8_t>(buffer.data(), readSize));
         }
     }
 
-    EraseIf(sessions_, [](const std::shared_ptr<TcpSession>& session) {
-        return session->isClosed;
-    });
+    EraseIf(sessions_, [](const Session& session) { return session.isClosed; });
 }
 
 } // namespace somera
