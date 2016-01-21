@@ -217,9 +217,9 @@ Socket::Socket(Socket && other)
     service_ = std::move(other.service_);
     descriptor_ = std::move(other.descriptor_);
     endPoint_ = std::move(other.endPoint_);
-    connectionConnect_ = std::move(other.connectionConnect_);
-    connectionRead_ = std::move(other.connectionRead_);
+    connectionActive_ = std::move(other.connectionActive_);
     onConnected_ = std::move(other.onConnected_);
+    onTimeout_ = std::move(other.onTimeout_);
     onRead_ = std::move(other.onRead_);
 }
 
@@ -230,9 +230,9 @@ Socket & Socket::operator=(Socket && other)
     service_ = std::move(other.service_);
     descriptor_ = std::move(other.descriptor_);
     endPoint_ = std::move(other.endPoint_);
-    connectionConnect_ = std::move(other.connectionConnect_);
-    connectionRead_ = std::move(other.connectionRead_);
+    connectionActive_ = std::move(other.connectionActive_);
     onConnected_ = std::move(other.onConnected_);
+    onTimeout_ = std::move(other.onTimeout_);
     onRead_ = std::move(other.onRead_);
 
     return *this;
@@ -240,8 +240,7 @@ Socket & Socket::operator=(Socket && other)
 
 void Socket::Close()
 {
-    connectionConnect_.Disconnect();
-    connectionRead_.Disconnect();
+    connectionActive_.Disconnect();
     descriptor_.Close();
 }
 
@@ -255,7 +254,7 @@ void Socket::Connect(const EndPoint& endPoint, std::function<void(Socket & socke
     std::tie(success, errorCode) = descriptor_.Connect(endPoint);
     if (success) {
         assert(service_ != nullptr);
-        connectionRead_ = service_->ScheduleTask([this]{ this->ReadEventLoop(); });
+        connectionActive_ = service_->ScheduleTask([this]{ this->ReadEventLoop(); });
         onConnected_(*this, {});
         return;
     }
@@ -274,7 +273,7 @@ void Socket::Connect(const EndPoint& endPoint, std::function<void(Socket & socke
 
     assert(service_ != nullptr);
     auto now = std::chrono::system_clock::now();
-    connectionConnect_ = service_->ScheduleTask([this, now = now] {
+    connectionActive_ = service_->ScheduleTask([this, now = now] {
         this->ConnectEventLoop(now);
     });
 }
@@ -302,6 +301,25 @@ int Socket::GetHandle() const
     return descriptor_.GetHandle();
 }
 
+void Socket::SetTimeout(const std::chrono::milliseconds& timeout)
+{
+    assert(timeout == decltype(timeout_)::zero() || timeout.count() > 0);
+    timeout_ = timeout;
+
+    // NOTE: bad code
+    decltype(onTimeout_) emptyCallback;
+    std::swap(onTimeout_, emptyCallback);
+}
+
+void Socket::SetTimeout(
+    const std::chrono::milliseconds& timeout,
+    const std::function<void(Socket&)>& callback)
+{
+    assert(timeout == decltype(timeout_)::zero() || timeout.count() > 0);
+    timeout_ = timeout;
+    onTimeout_ = callback;
+}
+
 void Socket::ConnectEventLoop(const std::chrono::system_clock::time_point& startTime)
 {
     fd_set fds;
@@ -313,35 +331,40 @@ void Socket::ConnectEventLoop(const std::chrono::system_clock::time_point& start
 
     if (result < 0 && code != EINTR) {
         assert(result == -1);
+        descriptor_.Close();
+        connectionActive_.Disconnect();
         onConnected_(*this, MakeError(StringHelper::format(
             "Error: Failed to call select() : %d - %s",
             code,
             strerror(code))));
-        connectionConnect_.Disconnect();
-        printf("Line=%d\n", __LINE__);
         return;
     }
 
     assert(result >= 0 || code == EINTR);
     if (result <= 0) {
         assert(result == 0);
+        descriptor_.Close();
+        connectionActive_.Disconnect();
         onConnected_(*this, MakeError(StringHelper::format(
             "Error: Failed to call select(), cancelling, code=%d, %s",
             code,
             strerror(code))));
-        connectionConnect_.Disconnect();
         return;
     }
 
-    if (code == ETIMEDOUT) {
+    const bool useTimeoutOption = (timeout_ > decltype(timeout_)::zero());
+    if (code == ETIMEDOUT && useTimeoutOption) {
         const auto now = std::chrono::system_clock::now();
-        const auto timeout = std::chrono::seconds(10);
-        if (now - startTime >= timeout) {
+        if (now - startTime >= timeout_) {
+            descriptor_.Close();
+            connectionActive_.Disconnect();
+            if (onTimeout_) {
+                onTimeout_(*this);
+            }
             onConnected_(*this, MakeError(StringHelper::format(
                 "Error: Timeout. socket error : %d - %s",
                 code,
                 strerror(code))));
-            connectionConnect_.Disconnect();
         }
         return;
     }
@@ -356,7 +379,7 @@ void Socket::ConnectEventLoop(const std::chrono::system_clock::time_point& start
             "Error: Failed to call getsockopt() : %d - %s",
             code,
             strerror(code))));
-        connectionConnect_.Disconnect();
+        connectionActive_.Disconnect();
         return;
     }
     if (socketError != 0) {
@@ -364,14 +387,13 @@ void Socket::ConnectEventLoop(const std::chrono::system_clock::time_point& start
             "Error: socketError : %d - %s",
             socketError,
             strerror(socketError))));
-        connectionConnect_.Disconnect();
+        connectionActive_.Disconnect();
         return;
     }
 
     // NOTE: Connected.
     assert(service_ != nullptr);
-    connectionRead_ = service_->ScheduleTask([this]{ this->ReadEventLoop(); });
-    connectionConnect_.Disconnect();
+    connectionActive_ = service_->ScheduleTask([this]{ this->ReadEventLoop(); });
     onConnected_(*this, {});
 }
 

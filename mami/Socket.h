@@ -92,6 +92,14 @@ public:
 
     void Write(const ArrayView<uint8_t const>& data);
 
+    ///@brief Sets the interval to wait for socket activity.
+    void SetTimeout(const std::chrono::milliseconds& timeout);
+
+    ///@brief Sets the interval to wait for socket activity.
+    void SetTimeout(
+        const std::chrono::milliseconds& timeout,
+        const std::function<void(Socket&)>& callback);
+
     EndPoint GetEndPoint() const;
 
     int GetHandle() const;
@@ -106,9 +114,10 @@ private:
     IOService* service_ = nullptr;
     DescriptorType descriptor_;
     EndPoint endPoint_;
-    ScopedConnection connectionConnect_;
-    ScopedConnection connectionRead_;
+    ScopedConnection connectionActive_;
+    std::chrono::milliseconds timeout_;
     std::function<void(Socket & socket, const Error&)> onConnected_;
+    std::function<void(Socket & socket)> onTimeout_;
     std::function<void(Socket & socket, const ArrayView<uint8_t>& view)> onRead_;
 };
 

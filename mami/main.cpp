@@ -2,9 +2,13 @@
 
 #include "IOService.h"
 #include "Socket.h"
+#include "EventQueue.h"
 #include "../daily/CommandLineParser.h"
 #include "../daily/StringHelper.h"
 #include <iostream>
+#include <thread>
+
+#include "Signal.h"
 
 using namespace somera;
 
@@ -52,20 +56,48 @@ void RunServer(uint16_t port)
     service.Run();
 }
 
+struct Client {
+    void onConnected()
+    {
+    }
+
+    void onRead()
+    {
+    }
+
+    void onEvent(Any & event)
+    {
+    }
+};
+
 void RunClient(uint16_t port)
 {
     IOService service;
+    EventQueue eventQueue;
 
-    auto onConnected = [](Socket & socket, const Error& error) {
+    auto onConnected = [&eventQueue, &service](Socket & socket, const Error& error) {
         if (error) {
             Log(error.What());
             return;
         }
         Log("Connected.");
 
-        std::string text = "Hello, socket!";
-        auto view = MakeArrayView(text.data(), text.size());
-        socket.Write(CastArrayView<uint8_t const>(view));
+        eventQueue.Connect([&socket, &service](const Any& event) {
+            if (!event.Is<std::string>()) {
+                return;
+            }
+            auto text = event.As<std::string>();
+            auto view = MakeArrayView(text.data(), text.size());
+            socket.Write(CastArrayView<uint8_t const>(view));
+
+            if (StringHelper::startWith(text, "exit")) {
+                socket.Close();
+                service.ExitLoop();
+            }
+        });
+    };
+    auto onTimeout = [&](Socket & socket) {
+        Log("Timeout.");
     };
     auto onRead = [](Socket & socket, const ArrayView<uint8_t>& view) {
         std::string text(reinterpret_cast<const char*>(view.data), view.size);
@@ -80,11 +112,31 @@ void RunClient(uint16_t port)
     };
 
     Socket socket(service);
+    socket.SetTimeout(std::chrono::seconds(500), onTimeout);
     socket.Connect(EndPoint::CreateFromV4("localhost", port), onConnected);
     socket.Read(onRead);
 
+    std::thread keyboardWorker([&] {
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        bool exitLoop = false;
+        while (!exitLoop) {
+            std::string text;
+            std::cin >> text;
+            if (StringHelper::startWith(text, "exit")) {
+                exitLoop = true;
+            }
+            eventQueue.Enqueue<std::string>(std::move(text));
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+    });
+
+    ScopedConnection conn = service.ScheduleTask([&] {
+        eventQueue.Emit();
+    });
+
     Log("Run");
     service.Run();
+    keyboardWorker.join();
 }
 
 } // unnamed namespace

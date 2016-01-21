@@ -51,9 +51,13 @@ private:
 
 void IOService::Run()
 {
-    bool exitRequest = false;
     while (!exitRequest) {
         for (auto & listener : listeners) {
+            if (Find(removedListeners, listener.id) != std::end(removedListeners)) {
+                listener.needToRemove = true;
+                continue;
+            }
+
             // NOTE: Execute listener's callback
             if (listener.callback) {
                 listener.callback();
@@ -72,11 +76,22 @@ void IOService::Run()
             std::vector<int> temp;
             std::swap(temp, removedListeners);
             EraseIf(listeners, [&temp](const Listener& listener) {
-                return Find(temp, listener.id) != std::end(temp);
+                return listener.needToRemove || Find(temp, listener.id) != std::end(temp);
             });
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+        // Note:
+        // I want to suppress energy impact if possible.
+        // First, I use `this_thread::sleep_for`,
+        // but this code cause a bug with ::select() and TCP socket:
+        //
+        //std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+}
+
+void IOService::ExitLoop()
+{
+    exitRequest = true;
 }
 
 Connection IOService::ScheduleTask(std::function<void()> func)

@@ -5,6 +5,7 @@ SOURCES = \
 	Connection.cpp \
 	EndPoint.cpp \
 	Error.cpp \
+	EventQueue.cpp \
 	IOService.cpp \
 	Socket.cpp \
 	main.cpp

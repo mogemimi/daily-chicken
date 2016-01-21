@@ -12,6 +12,8 @@ class IOService {
 public:
     void Run();
 
+    void ExitLoop();
+
     Connection ScheduleTask(std::function<void()> func);
 
     bool IsConnected(int connectionId) const;
@@ -22,6 +24,7 @@ private:
     struct Listener {
         std::function<void()> callback;
         int id = 0;
+        bool needToRemove = false;
     };
 
 private:
@@ -29,6 +32,7 @@ private:
     std::vector<Listener> addedListeners;
     std::vector<int> removedListeners;
     int nextListenersId = 42;
+    bool exitRequest = false;
 };
 
 } // namespace somera
