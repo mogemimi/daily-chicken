@@ -8,43 +8,27 @@
 namespace somera {
 
 class Defer final {
-    std::function<void()> func;
+    std::function<void()> callback;
 public:
-    explicit Defer(const std::function<void()>& funcIn)
-        : func(funcIn)
+    Defer() = delete;
+    Defer(const Defer&) = delete;
+    Defer(Defer && other) = delete;
+    Defer & operator=(const Defer&) = delete;
+    Defer & operator=(Defer && other) = delete;
+
+    explicit Defer(std::function<void()> && func)
+        : callback(std::move(func))
+    {}
+
+    explicit Defer(const std::function<void()>& func)
+        : callback(func)
     {}
 
     ~Defer()
     {
-        if (this->func) {
-            this->func();
+        if (callback) {
+            callback();
         }
-    }
-
-    Defer(const Defer&) = delete;
-    Defer & operator=(const Defer&) = delete;
-
-    Defer(Defer && other)
-    {
-        if (this->func) {
-            this->func();
-        }
-        this->func = std::move(other.func);
-    }
-
-    Defer & operator=(Defer && other)
-    {
-        if (this->func) {
-            this->func();
-        }
-        this->func = std::move(other.func);
-        return *this;
-    }
-
-    void cancel()
-    {
-        std::function<void()> f;
-        std::swap(func, f);
     }
 };
 
