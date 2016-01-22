@@ -80,12 +80,8 @@ void IOService::Run()
             });
         }
 
-        // Note:
-        // I want to suppress energy impact if possible.
-        // First, I use `this_thread::sleep_for`,
-        // but this code cause a bug with ::select() and TCP socket:
-        //
-        //std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        // NOTE: I want to suppress energy impact if possible.
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
 

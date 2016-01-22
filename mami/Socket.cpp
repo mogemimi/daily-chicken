@@ -273,9 +273,13 @@ void Socket::Connect(const EndPoint& endPoint, std::function<void(Socket & socke
 
     assert(service_ != nullptr);
     auto now = std::chrono::system_clock::now();
+
     connectionActive_ = service_->ScheduleTask([this, now = now] {
         this->ConnectEventLoop(now);
     });
+
+    // NOTE: First challenge before this_thread::sleep_for()
+    ConnectEventLoop(now);
 }
 
 void Socket::Read(const std::function<void(Socket&, const ArrayView<uint8_t>&)>& onRead)
