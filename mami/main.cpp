@@ -35,12 +35,17 @@ void RunServer(uint16_t port)
 {
     IOService service;
 
-    ServerSocket socket(service);
-    socket.Bind(EndPoint::CreateFromV4("localhost", port));
-    socket.Listen(5, [](Socket & client, const Error&) {
+    Server server(service);
+    server.SetErrorListener([](const Error& error) {
+        Log("Error: " + error.What());
+    });
+    server.SetCloseListener([](Socket & client) {
+        Log(StringHelper::format("Close: client = { fd : %d }", client.GetHandle()));
+    });
+    server.Listen(EndPoint::CreateFromV4("localhost", port), 5, [](Socket & client) {
         Log(StringHelper::format("Listen: client = { fd : %d }", client.GetHandle()));
     });
-    socket.Read([](Socket & client, const ArrayView<uint8_t>& view) {
+    server.Read([](Socket & client, const ArrayView<uint8_t>& view) {
         std::string text(reinterpret_cast<const char*>(view.data), view.size);
         text = StringHelper::trimRight(text, '\n');
         text = StringHelper::trimRight(text, '\r');
@@ -56,32 +61,25 @@ void RunServer(uint16_t port)
     service.Run();
 }
 
-struct Client {
-    void onConnected()
-    {
-    }
-
-    void onRead()
-    {
-    }
-
-    void onEvent(Any & event)
-    {
-    }
-};
-
 void RunClient(uint16_t port)
 {
     IOService service;
     EventQueue eventQueue;
 
-    auto onConnected = [&eventQueue, &service](Socket & socket, const Error& error) {
-        if (error) {
-            Log(error.What());
-            return;
-        }
+    Socket socket(service);
+    socket.SetTimeout(std::chrono::seconds(500), [](Socket &) {
+        Log("Timeout.");
+    });
+    socket.SetErrorListener([&socket](Socket &, const Error& error) {
+        Log("Error: " + error.What());
+        socket.Close();
+    });
+    socket.SetCloseListener([](Socket&) {
+        Log("Close.");
+    });
+    socket.Connect(EndPoint::CreateFromV4("localhost", port),
+        [&eventQueue, &service, &socket](Socket &) {
         Log("Connected.");
-
         eventQueue.Connect([&socket, &service](const Any& event) {
             if (!event.Is<std::string>()) {
                 return;
@@ -95,11 +93,8 @@ void RunClient(uint16_t port)
                 service.ExitLoop();
             }
         });
-    };
-    auto onTimeout = [&](Socket & socket) {
-        Log("Timeout.");
-    };
-    auto onRead = [](Socket & socket, const ArrayView<uint8_t>& view) {
+    });
+    socket.Read([&socket](Socket &, const ArrayView<uint8_t>& view) {
         std::string text(reinterpret_cast<const char*>(view.data), view.size);
         text = StringHelper::trimRight(text, '\n');
         text = StringHelper::trimRight(text, '\r');
@@ -109,12 +104,7 @@ void RunClient(uint16_t port)
             "Read: server = { fd : %d, result = %s }",
             socket.GetHandle(),
             text.c_str()));
-    };
-
-    Socket socket(service);
-    socket.SetTimeout(std::chrono::seconds(500), onTimeout);
-    socket.Connect(EndPoint::CreateFromV4("localhost", port), onConnected);
-    socket.Read(onRead);
+    });
 
     std::thread keyboardWorker([&] {
         std::this_thread::sleep_for(std::chrono::seconds(5));

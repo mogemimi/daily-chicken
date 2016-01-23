@@ -63,6 +63,7 @@ void IOService::Run()
                 listener.callback();
             }
         }
+        // TODO: mutex for addedListeners
         if (!addedListeners.empty()) {
             // NOTE: Add listener to listeners container
             std::vector<Listener> temp;
@@ -71,6 +72,7 @@ void IOService::Run()
                 listeners.push_back(std::move(listener));
             }
         }
+        // TODO: mutex for removedListeners
         if (!removedListeners.empty()) {
             // NOTE: Remove listener from listeners container
             std::vector<int> temp;

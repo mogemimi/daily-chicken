@@ -78,7 +78,7 @@ public:
     Socket(Socket && other);
     Socket & operator=(Socket && other);
 
-    void Connect(const EndPoint& endPoint, std::function<void(Socket & socket, const Error&)> onConnected);
+    void Connect(const EndPoint& endPoint, std::function<void(Socket & socket)> onConnected);
 
     void Close();
 
@@ -100,6 +100,10 @@ public:
         const std::chrono::milliseconds& timeout,
         const std::function<void(Socket&)>& callback);
 
+    void SetErrorListener(const std::function<void(Socket & socket, const Error&)>& callback);
+
+    void SetCloseListener(const std::function<void(Socket &)>& callback);
+
     EndPoint GetEndPoint() const;
 
     int GetHandle() const;
@@ -116,20 +120,23 @@ private:
     EndPoint endPoint_;
     ScopedConnection connectionActive_;
     std::chrono::milliseconds timeout_;
-    std::function<void(Socket & socket, const Error&)> onConnected_;
+    std::function<void(Socket & socket)> onConnected_;
     std::function<void(Socket & socket)> onTimeout_;
     std::function<void(Socket & socket, const ArrayView<uint8_t>& view)> onRead_;
+    std::function<void(Socket & socket, const Error&)> onError_;
+    std::function<void(Socket & socket)> onClose_;
 };
 
-class ServerSocket {
+class Server {
 public:
-    ServerSocket(IOService & service);
+    Server(IOService & service);
 
-    ~ServerSocket();
+    ~Server();
 
-    void Bind(const EndPoint& endPoint);
-
-    void Listen(int backlog, const std::function<void(Socket&, const Error&)>& onAccept);
+    void Listen(
+        const EndPoint& endPoint,
+        int backlog,
+        const std::function<void(Socket&)>& onAccept);
 
     void Close();
 
@@ -140,6 +147,10 @@ public:
 //    void Timeout(const std::function<void(Socket&)>& onReadError);
 //
 //    void Disconnect(const std::function<void(Socket&)>& onReadError);
+
+    void SetErrorListener(const std::function<void(const Error&)>& callback);
+
+    void SetCloseListener(const std::function<void(Socket &)>& callback);
 
 private:
     void ListenEventLoop();
@@ -161,8 +172,10 @@ private:
     ScopedConnection connectionListen_;
     ScopedConnection connectionRead_;
     int maxSessionCount_ = 5;
-    std::function<void(Socket & socket, const Error&)> onAccept_;
+    std::function<void(Socket & socket)> onAccept_;
     std::function<void(Socket & socket, const ArrayView<uint8_t>& view)> onRead_;
+    std::function<void(const Error&)> onError_;
+    std::function<void(Socket & socket)> onClose_;
 };
 
 } // namespace somera
