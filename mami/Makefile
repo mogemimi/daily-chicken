@@ -8,7 +8,7 @@ SOURCES = \
 	EventQueue.cpp \
 	IOService.cpp \
 	Socket.cpp \
-	main.cpp
+	EchoServer/main.cpp
 
 xcode:
 	./../bin/hidamari -generator=xcode \

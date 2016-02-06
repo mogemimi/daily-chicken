@@ -52,38 +52,44 @@ private:
 void IOService::Run()
 {
     while (!exitRequest) {
-        for (auto & listener : listeners) {
-            if (Find(removedListeners, listener.id) != std::end(removedListeners)) {
-                listener.needToRemove = true;
-                continue;
-            }
-
-            // NOTE: Execute listener's callback
-            if (listener.callback) {
-                listener.callback();
-            }
-        }
-        // TODO: mutex for addedListeners
-        if (!addedListeners.empty()) {
-            // NOTE: Add listener to listeners container
-            std::vector<Listener> temp;
-            std::swap(temp, addedListeners);
-            for (auto & listener : temp) {
-                listeners.push_back(std::move(listener));
-            }
-        }
-        // TODO: mutex for removedListeners
-        if (!removedListeners.empty()) {
-            // NOTE: Remove listener from listeners container
-            std::vector<int> temp;
-            std::swap(temp, removedListeners);
-            EraseIf(listeners, [&temp](const Listener& listener) {
-                return listener.needToRemove || Find(temp, listener.id) != std::end(temp);
-            });
-        }
+        Step();
 
         // NOTE: I want to suppress energy impact if possible.
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+}
+
+void IOService::Step()
+{
+    for (auto & listener : listeners) {
+        if (Find(removedListeners, listener.id) != std::end(removedListeners)) {
+            listener.needToRemove = true;
+            continue;
+        }
+
+        // NOTE: Execute listener's callback
+        if (listener.callback) {
+            listener.callback();
+        }
+    }
+    // TODO: mutex for addedListeners
+    if (!addedListeners.empty()) {
+        // NOTE: Add listener to listeners container
+        std::vector<Listener> temp;
+        std::swap(temp, addedListeners);
+        for (auto & listener : temp) {
+            listeners.push_back(std::move(listener));
+        }
+    }
+    // TODO: mutex for removedListeners
+    if (!removedListeners.empty()) {
+        // NOTE: Remove listener from listeners container
+        std::vector<int> temp;
+        std::swap(temp, removedListeners);
+        EraseIf(listeners, [&temp](const Listener& listener) {
+            return listener.needToRemove
+                || (Find(temp, listener.id) != std::end(temp));
+        });
     }
 }
 

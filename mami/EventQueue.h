@@ -1,7 +1,8 @@
-// Copyright (c) 2016 mogemimi. Distributed under the MIT license.
+// Copyright (c) 2013-2016 mogemimi. Distributed under the MIT license.
 
 #pragma once
 
+#include "Signals-ForwardDeclarations.h"
 #include "Any.h"
 #include <functional>
 #include <memory>
@@ -13,13 +14,16 @@ namespace somera {
 
 class EventQueue final {
 public:
-    EventQueue() = default;
+    EventQueue();
+
     EventQueue(EventQueue const&) = delete;
     EventQueue(EventQueue &&) = delete;
     EventQueue & operator=(EventQueue const&) = delete;
     EventQueue & operator=(EventQueue &&) = delete;
 
-    void Connect(const std::function<void(const Any&)>& handler);
+    Connection Connect(std::function<void(const Any&)> const& slot);
+
+    Connection Connect(std::function<void(const Any&)> && slot);
 
     void Enqueue(Any && event);
 
@@ -40,9 +44,10 @@ public:
     void Emit();
 
 private:
+    using SignalBody = detail::signals::SignalBody<void(const Any&)>;
     std::vector<Any> events;
     std::recursive_mutex notificationMutex;
-    std::function<void(const Any&)> handler;
+    std::shared_ptr<SignalBody> signalBody;
 };
 
 } // namespace somera

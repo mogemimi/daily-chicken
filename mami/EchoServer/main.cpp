@@ -1,14 +1,12 @@
 // Copyright (c) 2016 mogemimi. Distributed under the MIT license.
 
-#include "IOService.h"
-#include "Socket.h"
-#include "EventQueue.h"
-#include "../daily/CommandLineParser.h"
-#include "../daily/StringHelper.h"
+#include "../IOService.h"
+#include "../Socket.h"
+#include "../EventQueue.h"
+#include "../../daily/CommandLineParser.h"
+#include "../../daily/StringHelper.h"
 #include <iostream>
 #include <thread>
-
-#include "Signal.h"
 
 using namespace somera;
 
@@ -81,10 +79,10 @@ void RunClient(uint16_t port)
         [&eventQueue, &service, &socket](Socket &) {
         Log("Connected.");
         eventQueue.Connect([&socket, &service](const Any& event) {
-            if (!event.Is<std::string>()) {
+            if (!event.is<std::string>()) {
                 return;
             }
-            auto text = event.As<std::string>();
+            auto text = event.as<std::string>();
             auto view = MakeArrayView(text.data(), text.size());
             socket.Write(CastArrayView<uint8_t const>(view));
 

@@ -136,11 +136,11 @@ public:
     void Listen(
         const EndPoint& endPoint,
         int backlog,
-        const std::function<void(Socket&)>& onAccept);
+        const std::function<void(const std::shared_ptr<Socket>&)>& onAccept);
 
     void Close();
 
-    void Read(const std::function<void(Socket&, const ArrayView<uint8_t>&)>& onRead);
+    void Read(const std::function<void(const std::shared_ptr<Socket>&, const ArrayView<uint8_t>&)>& onRead);
 
 //    void ReadError(const std::function<void(Socket&, const Error&)>& onReadError);
 //
@@ -150,7 +150,7 @@ public:
 
     void SetErrorListener(const std::function<void(const Error&)>& callback);
 
-    void SetCloseListener(const std::function<void(Socket &)>& callback);
+    void SetCloseListener(const std::function<void(const std::shared_ptr<Socket>&)>& callback);
 
 private:
     void ListenEventLoop();
@@ -159,7 +159,7 @@ private:
 
 private:
     struct Session {
-        Socket socket;
+        std::shared_ptr<Socket> socket;
         bool isClosed = false;
     };
 
@@ -172,10 +172,10 @@ private:
     ScopedConnection connectionListen_;
     ScopedConnection connectionRead_;
     int maxSessionCount_ = 5;
-    std::function<void(Socket & socket)> onAccept_;
-    std::function<void(Socket & socket, const ArrayView<uint8_t>& view)> onRead_;
+    std::function<void(const std::shared_ptr<Socket>&)> onAccept_;
+    std::function<void(const std::shared_ptr<Socket>&, const ArrayView<uint8_t>&)> onRead_;
+    std::function<void(const std::shared_ptr<Socket>&)> onClose_;
     std::function<void(const Error&)> onError_;
-    std::function<void(Socket & socket)> onClose_;
 };
 
 } // namespace somera

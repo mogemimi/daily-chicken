@@ -12,6 +12,8 @@ class IOService {
 public:
     void Run();
 
+    void Step();
+
     void ExitLoop();
 
     Connection ScheduleTask(std::function<void()> func);

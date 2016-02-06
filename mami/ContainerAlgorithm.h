@@ -13,6 +13,19 @@ void EraseIf(Container & c, Func f)
     c.erase(std::remove_if(std::begin(c), std::end(c), f), std::end(c));
 }
 
+template <class Container, class Func>
+void EraseMapIf(Container & c, Func f)
+{
+    typename Container::iterator it = std::begin(c);
+    while (it != std::end(c)) {
+        if (f(*it)) {
+            c.erase(it++);
+        } else {
+            ++it;
+        }
+    }
+}
+
 template <class Container, class T>
 auto Find(Container & c, const T& value)
 {

@@ -349,4 +349,80 @@ int RunClient()
     return 0;
 }
 
+class GameWorld {
+private:
+    sf::Clock clock;
+    sf::Time prevFrameTime;
+    std::vector<std::shared_ptr<Ship>> ships;
+    std::vector<std::shared_ptr<Bullet>> bullets;
+
+public:
+    GameWorld()
+    {
+        prevFrameTime = clock.getElapsedTime();
+
+        auto ship = std::make_shared<Ship>();
+        ship->id = 0;
+        ship->position = sf::Vector2f(0, 0);
+        ship->rotation = 0;
+        ships.push_back(ship);
+    }
+
+    void UpdateFrame(std::vector<std::shared_ptr<Command>> & commands)
+    {
+        const auto currentFrameTime = clock.getElapsedTime();
+        const auto duration = currentFrameTime - prevFrameTime;
+
+        this->HandleCommands(duration, commands);
+
+        prevFrameTime = currentFrameTime;
+    }
+
+    void HandleCommands(const sf::Time& duration, std::vector<std::shared_ptr<Command>> & commands)
+    {
+        int shipId = 0;
+        for (auto & command : commands) {
+            if (auto moveCommand = std::dynamic_pointer_cast<MoveCommand>(command)) {
+                HandleCommand(*moveCommand, duration, shipId);
+            }
+            else if (auto shotCommand = std::dynamic_pointer_cast<ShotCommand>(command)) {
+                HandleCommand(*shotCommand, duration, shipId);
+            }
+        }
+        commands.clear();
+    }
+
+    void HandleCommand(const MoveCommand& command, const sf::Time& duration, int shipId)
+    {
+        if (Math::Length(command.direction) <= 0.1f) {
+            return;
+        }
+        auto iter = somera::FindIf(ships, [&](const auto& ship){ return ship->id == shipId; });
+        if (iter == std::end(ships)) {
+            std::printf("Warning: Invalid player id, id=%d", shipId);
+            return;
+        }
+
+        auto& ship = *iter;
+        ship->position = ship->position + Math::Normalize(command.direction) * duration.asSeconds() * 30.0f;
+        ship->rotation = 90 + Math::ToDegree(Math::ComputeAngle(command.direction));
+    }
+
+    void HandleCommand(const ShotCommand& command, const sf::Time& duration, int shipId)
+    {
+        if (Math::Length(command.direction) <= 0.1f) {
+            return;
+        }
+        auto iter = somera::FindIf(ships, [&](const auto& ship){ return ship->id == shipId; });
+        if (iter == std::end(ships)) {
+            std::printf("Warning: Invalid player id, id=%d", shipId);
+            return;
+        }
+
+        auto& ship = *iter;
+        ship->position = ship->position + Math::Normalize(command.direction) * duration.asSeconds() * 30.0f;
+        ship->rotation = 90 + Math::ToDegree(Math::ComputeAngle(command.direction));
+    }
+};
+
 #endif

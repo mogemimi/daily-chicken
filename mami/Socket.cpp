@@ -482,7 +482,7 @@ Server::~Server()
 void Server::Listen(
     const EndPoint& endPoint,
     int backlog,
-    const std::function<void(Socket&)>& onAccept)
+    const std::function<void(const std::shared_ptr<Socket>&)>& onAccept)
 {
     descriptor_.Bind(endPoint);
 
@@ -504,7 +504,7 @@ void Server::Close()
     descriptor_.Close();
 }
 
-void Server::Read(const std::function<void(Socket&, const ArrayView<uint8_t>&)>& onRead)
+void Server::Read(const std::function<void(const std::shared_ptr<Socket>&, const ArrayView<uint8_t>&)>& onRead)
 {
     onRead_ = onRead;
 }
@@ -514,7 +514,7 @@ void Server::SetErrorListener(const std::function<void(const Error&)>& callback)
     onError_ = callback;
 }
 
-void Server::SetCloseListener(const std::function<void(Socket &)>& callback)
+void Server::SetCloseListener(const std::function<void(const std::shared_ptr<Socket>&)>& callback)
 {
     onClose_ = callback;
 }
@@ -550,7 +550,8 @@ void Server::ListenEventLoop()
         EndPoint endPoint;
         std::tie(descriptor, endPoint) = descriptor_.Accept(detail::ProtocolType::Tcp);
 
-        Socket socket(*service_, std::move(descriptor), std::move(endPoint));
+        auto socket = std::make_shared<Socket>(
+            *service_, std::move(descriptor), std::move(endPoint));
 
         Session session;
         session.socket = std::move(socket);
@@ -575,12 +576,13 @@ void Server::ReadEventLoop()
 
     for (auto & session : sessions_) {
         assert(!session.isClosed);
+        assert(session.socket);
 
         std::vector<uint8_t> buffer(1024, 0);
         size_t readSize;
         Optional<SocketError> errorCode;
         std::tie(readSize, errorCode) = ReadSocket(
-            session.socket.GetHandle(), buffer.data(), buffer.size() - 1);
+            session.socket->GetHandle(), buffer.data(), buffer.size() - 1);
 
         if (errorCode) {
             switch (*errorCode) {
@@ -589,7 +591,8 @@ void Server::ReadEventLoop()
                 if (onClose_) {
                     onClose_(session.socket);
                 }
-                session.socket.Close();
+                session.socket->Close();
+                session.socket.reset();
                 session.isClosed = true;
                 continue;
             }
@@ -597,7 +600,8 @@ void Server::ReadEventLoop()
                 if (onClose_) {
                     onClose_(session.socket);
                 }
-                session.socket.Close();
+                session.socket->Close();
+                session.socket.reset();
                 session.isClosed = true;
                 continue;
             }

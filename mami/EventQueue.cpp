@@ -1,13 +1,27 @@
-// Copyright (c) 2016 mogemimi. Distributed under the MIT license.
+// Copyright (c) 2013-2016 mogemimi. Distributed under the MIT license.
 
 #include "EventQueue.h"
+#include "Connection.h"
+#include "SignalBody.h"
 
 namespace somera {
 
-void EventQueue::Connect(const std::function<void(const Any&)>& handlerIn)
+EventQueue::EventQueue()
+    : signalBody(std::move(std::make_shared<SignalBody>()))
+{}
+
+Connection EventQueue::Connect(std::function<void(const Any&)> const& slot)
 {
-    assert(handlerIn);
-    handler = handlerIn;
+    assert(slot);
+    assert(this->signalBody);
+    return Connection{signalBody->Connect(slot)};
+}
+
+Connection EventQueue::Connect(std::function<void(const Any&)> && slot)
+{
+    assert(slot);
+    assert(this->signalBody);
+    return Connection{signalBody->Connect(slot)};
 }
 
 void EventQueue::Enqueue(Any && event)
@@ -18,16 +32,14 @@ void EventQueue::Enqueue(Any && event)
 
 void EventQueue::Emit()
 {
-    if (!handler) {
-        return;
-    }
+    assert(signalBody);
     std::vector<Any> notifications;
     {
         std::lock_guard<std::recursive_mutex> lock(notificationMutex);
         std::swap(notifications, events);
     }
-    for (auto & event: notifications) {
-        handler(event);
+    for (auto & event : notifications) {
+        signalBody->operator()(event);
     }
 }
 
