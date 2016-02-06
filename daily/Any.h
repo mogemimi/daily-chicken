@@ -1,13 +1,16 @@
-// Copyright (c) 2015 mogemimi. Distributed under the MIT license.
+// Copyright (c) 2015-2016 mogemimi. Distributed under the MIT license.
 
 #pragma once
 
 #include <cassert>
 #include <memory>
-#include <utility>
 #include <typeindex>
 #include <typeinfo>
 #include <type_traits>
+#include <utility>
+#ifdef _HAS_EXCEPTIONS
+#include <exception>
+#endif
 
 namespace somera {
 
@@ -59,7 +62,10 @@ public:
     {
         assert(typeIndex == typeid(T));
         if (!is<T>()) {
-            //throw BadAnyCast;
+#ifdef _HAS_EXCEPTIONS
+            using BadAnyCast = std::runtime_error;
+            throw BadAnyCast;
+#endif
         }
         assert(is<T>());
         assert(data);
@@ -73,7 +79,10 @@ public:
     {
         assert(typeIndex == typeid(T));
         if (!is<T>()) {
-            //throw BadAnyCast;
+#ifdef _HAS_EXCEPTIONS
+            using BadAnyCast = std::runtime_error;
+            throw BadAnyCast;
+#endif
         }
         assert(is<T>());
         assert(data);
